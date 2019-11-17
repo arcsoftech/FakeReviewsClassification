@@ -29,7 +29,7 @@ object ProjectHandler {
 
     // create Spark context with Spark configuration
     //    val sparkConf = new SparkConf().setMaster("local[2]").setAppName("ProjectMain");   //Local
-    val sparkConf = new SparkConf().setAppName("FakeReviewsClassification");                       //AWS
+    val sparkConf = new SparkConf().setAppName("FakeReviewsClassification").set("spark.sql.broadcastTimeout","36000");                       //AWS
 
     val sc = new SparkContext(sparkConf)
 
@@ -48,7 +48,7 @@ object ProjectHandler {
     import org.apache.spark.ml.evaluation._
 
 
-    val raw_reviews_df = sparkSession.read.csv(inputFilePath)
+    val raw_reviews_df = sparkSession.read.option("inferSchema", "true").option("header", "true").csv(inputFilePath)
 
     val generateCompositeId = udf( (first: String, second: String, third: String) => { first + "_" + second + "_" + third } )
 
