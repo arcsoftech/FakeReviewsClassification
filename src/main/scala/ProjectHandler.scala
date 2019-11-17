@@ -1,16 +1,8 @@
-import java.util.Properties
-
-import edu.stanford.nlp.ling.CoreAnnotations
-import edu.stanford.nlp.neural.rnn.RNNCoreAnnotations
-import edu.stanford.nlp.pipeline.{Annotation, StanfordCoreNLP}
-import edu.stanford.nlp.sentiment.SentimentCoreAnnotations
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StructField, StructType}
 import org.apache.spark.sql.{Row, SaveMode, SparkSession, types}
 import org.apache.spark.{SparkConf, SparkContext}
 import scala.collection.mutable
-import scala.collection.convert.wrapAll._
-
 
 object ProjectHandler {
   def main(args: Array[String]): Unit = {
