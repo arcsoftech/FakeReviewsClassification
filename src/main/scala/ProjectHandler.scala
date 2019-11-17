@@ -58,10 +58,10 @@ object ProjectHandler {
 
     // Extracting Sentiment value for each review
     val reviews_text_df = reviews_df1.select("review_id", "review_body")
-//    def analyzeSentiment: (String => Int) = { s => this.mainSentiment(s) }
-//    val analyzeSentimentUDF = udf(analyzeSentiment)
+def analyzeSentiment: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s) }
+ val analyzeSentimentUDF = udf(analyzeSentiment)
 
-    val sentiment_df1 = reviews_text_df.withColumn("sentiment", SentimentAnalyzer.mainSentiment(reviews_text_df("review_body")))
+    val sentiment_df1 = reviews_text_df.withColumn("sentiment", analyzeSentimentUDF(reviews_text_df("review_body")))
     val sentiment_df2 = sentiment_df1.select("review_id", "sentiment")
 
     sentiment_df2.cache();
