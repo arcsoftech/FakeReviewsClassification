@@ -29,13 +29,13 @@ object ProjectHandler {
 
     // create Spark context with Spark configuration
     //    val sparkConf = new SparkConf().setMaster("local[2]").setAppName("ProjectMain");   //Local
-    val sparkConf = new SparkConf().setAppName("ProjectMain");                       //AWS
+    val sparkConf = new SparkConf().setAppName("FakeReviewsClassification");                       //AWS
 
     val sc = new SparkContext(sparkConf)
 
     val sparkSession = SparkSession.builder
       .config(conf = sparkConf)
-      .appName("ProjectMain")
+      .appName("FakeReviewsClassification")
       .getOrCreate()
 
     sc.setLogLevel("ERROR")
@@ -48,27 +48,27 @@ object ProjectHandler {
     import org.apache.spark.ml.evaluation._
 
 
-    val raw_reviews_df = sparkSession.read.json(inputFilePath)
+    val raw_reviews_df = sparkSession.read.csv(inputFilePath)
 
     val generateCompositeId = udf( (first: String, second: String, third: String) => { first + "_" + second + "_" + third } )
 
     //generating ids for each review
-    val reviews_df1  = raw_reviews_df.withColumn("review_id", generateCompositeId($"asin", $"reviewerID", $"unixReviewTime"))
+    val reviews_df1  = raw_reviews_df.withColumn("review_id", generateCompositeId($"product_id", $"customer_id", $"review_date"))
 
     reviews_df1.cache();
 
     // Extracting Sentiment value for each review
-    val reviews_text_df = reviews_df1.select("review_id", "summary")
+    val reviews_text_df = reviews_df1.select("review_id", "review_body")
     def analyzeSentiment: (String => Int) = { s => this.mainSentiment(s) }
     val analyzeSentimentUDF = udf(analyzeSentiment)
 
-    val sentiment_df1 = reviews_text_df.withColumn("sentiment", analyzeSentimentUDF(reviews_text_df("summary")))
+    val sentiment_df1 = reviews_text_df.withColumn("sentiment", analyzeSentimentUDF(reviews_text_df("review_body")))
     val sentiment_df2 = sentiment_df1.select("review_id", "sentiment")
 
     sentiment_df2.cache();
 
     //Dropping text review column after extracting sentiment
-    val reviews_df2 = reviews_df1.select("review_id","asin","helpful","overall","reviewerID","reviewerName","unixReviewTime");
+    val reviews_df2 = reviews_df1.select("review_id","product_id","helpful_votes","star_rating","customer_id","review_date");
 
     reviews_df2.cache()
     reviews_df2.show()
@@ -82,29 +82,29 @@ object ProjectHandler {
 
 
     //calculating average sentiment score for the product
-    val product_avg_sentiment_score_df = reviews_df3.select("asin", "sentiment")
+    val product_avg_sentiment_score_df = reviews_df3.select("product_id", "sentiment")
     val asinSentimentMap = product_avg_sentiment_score_df.columns.map((_ -> "mean")).toMap
     val product_avg_sentiment_score_df1 = product_avg_sentiment_score_df.groupBy('asin).agg(asinSentimentMap);
     product_avg_sentiment_score_df1.show()
     product_avg_sentiment_score_df1.cache()
 
-    val product_avg_sentiment_score_df2 = product_avg_sentiment_score_df1.drop("avg(asin)")
+    val product_avg_sentiment_score_df2 = product_avg_sentiment_score_df1.drop("avg(product_id)")
 
 
     println("product_avg_sentiment_score_df2 completed");
 
     //calculating average overall review score for the product
-    val product_avg_overall_df = reviews_df3.select("asin", "overall")
+    val product_avg_overall_df = reviews_df3.select("product_id", "star_rating")
     val asinOverallMap = product_avg_overall_df.columns.map((_ -> "mean")).toMap
     val product_avg_overall_df1 = product_avg_overall_df.groupBy('asin).agg(asinOverallMap);
     product_avg_overall_df1.show()
 
-    val product_avg_overall_df2 = product_avg_overall_df1.drop("avg(asin)")
+    val product_avg_overall_df2 = product_avg_overall_df1.drop("avg(product_id)")
 
-    val reviews_df4 = reviews_df3.join(product_avg_sentiment_score_df2 ,Seq("asin"))
+    val reviews_df4 = reviews_df3.join(product_avg_sentiment_score_df2 ,Seq("product_id"))
 
 
-    val reviews_df5 = reviews_df4.join(product_avg_overall_df2 ,Seq("asin"))
+    val reviews_df5 = reviews_df4.join(product_avg_overall_df2 ,Seq("product_id"))
 
 
     //Used to calculate how specific instance is different from group average
@@ -117,7 +117,7 @@ object ProjectHandler {
 
     val reviews_df6 = reviews_df5.withColumn("sentimentDelta" , deltaUdf(reviews_df5("avg(sentiment)"),reviews_df5("sentiment")))
 
-    val reviews_df7 = reviews_df6.withColumn("overallDelta" , deltaUdf(reviews_df6("avg(overall)"),reviews_df6("overall")))
+    val reviews_df7 = reviews_df6.withColumn("overallDelta" , deltaUdf(reviews_df6("avg(star_rating)"),reviews_df6("star_rating")))
 
 
 
@@ -135,7 +135,7 @@ object ProjectHandler {
     }
     val computeHelpfulUdf = udf(computeHelpfulColumn _)
 
-    val reviews_df8 = reviews_df7.withColumn("helpful_ratio", computeHelpfulUdf($"helpful"))
+    val reviews_df8 = reviews_df7.withColumn("helpful_ratio", computeHelpfulUdf($"helpful_votes"))
 
 
     val assembler = new VectorAssembler()
@@ -199,7 +199,7 @@ object ProjectHandler {
       spammer_df.show();
 
       val spammer_df2 = spammer_df.columns.foldLeft(spammer_df)((current, c) => current.withColumn(c, col(c).cast("String")))
-      val spammer_df3 = spammer_df2.select("review_id","asin", "reviewerID", "prediction", "normal")
+      val spammer_df3 = spammer_df2.select("review_id","product_id", "customer_id", "prediction", "normal")
 
       spammer_df3.coalesce(1).write.mode(SaveMode.Overwrite).csv(outputFilePath + "_" + a);
 
