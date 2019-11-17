@@ -8,7 +8,6 @@ import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StructField, StructType}
 import org.apache.spark.sql.{Row, SaveMode, SparkSession, types}
 import org.apache.spark.{SparkConf, SparkContext}
-
 import scala.collection.mutable
 import scala.collection.convert.wrapAll._
 
@@ -59,10 +58,10 @@ object ProjectHandler {
 
     // Extracting Sentiment value for each review
     val reviews_text_df = reviews_df1.select("review_id", "review_body")
-    def analyzeSentiment: (String => Int) = { s => this.mainSentiment(s) }
-    val analyzeSentimentUDF = udf(analyzeSentiment)
+//    def analyzeSentiment: (String => Int) = { s => this.mainSentiment(s) }
+//    val analyzeSentimentUDF = udf(analyzeSentiment)
 
-    val sentiment_df1 = reviews_text_df.withColumn("sentiment", analyzeSentimentUDF(reviews_text_df("review_body")))
+    val sentiment_df1 = reviews_text_df.withColumn("sentiment", SentimentAnalyzer.mainSentiment(reviews_text_df("review_body")))
     val sentiment_df2 = sentiment_df1.select("review_id", "sentiment")
 
     sentiment_df2.cache();
@@ -213,30 +212,30 @@ object ProjectHandler {
   } //end of main
 
   //NLP Properties
-  val props = new Properties()
-  props.setProperty("annotators", "tokenize, ssplit, parse, sentiment")
-  val pipeline: StanfordCoreNLP = new StanfordCoreNLP(props)
-
-  def mainSentiment(input: String): Int = Option(input) match {
-    case Some(text) if !text.isEmpty => {
-      var sentiment:Int  = extractSentiment(text)
-      return sentiment }
-    case _ => throw new IllegalArgumentException("input can't be null or empty")
-  }
-
-  private def extractSentiment(text: String): Int = {
-    val (_, sentiment) = extractSentiments(text)
-      .maxBy { case (sentence, _) => sentence.length }
-    sentiment
-  }
-
-  def extractSentiments(text: String): List[(String, Int)] = {
-    val annotation: Annotation = pipeline.process(text)
-    val sentences = annotation.get(classOf[CoreAnnotations.SentencesAnnotation])
-    sentences
-      .map(sentence => (sentence, sentence.get(classOf[SentimentCoreAnnotations.SentimentAnnotatedTree])))
-      .map { case (sentence, tree) => (sentence.toString, RNNCoreAnnotations.getPredictedClass(tree)) }
-      .toList
-  }
+//  val props = new Properties()
+//  props.setProperty("annotators", "tokenize, ssplit, parse, sentiment")
+//  val pipeline: StanfordCoreNLP = new StanfordCoreNLP(props)
+//
+//  def mainSentiment(input: String): Int = Option(input) match {
+//    case Some(text) if !text.isEmpty => {
+//      var sentiment:Int  = extractSentiment(text)
+//      return sentiment }
+//    case _ => throw new IllegalArgumentException("input can't be null or empty")
+//  }
+//
+//  private def extractSentiment(text: String): Int = {
+//    val (_, sentiment) = extractSentiments(text)
+//      .maxBy { case (sentence, _) => sentence.length }
+//    sentiment
+//  }
+//
+//  def extractSentiments(text: String): List[(String, Int)] = {
+//    val annotation: Annotation = pipeline.process(text)
+//    val sentences = annotation.get(classOf[CoreAnnotations.SentencesAnnotation])
+//    sentences
+//      .map(sentence => (sentence, sentence.get(classOf[SentimentCoreAnnotations.SentimentAnnotatedTree])))
+//      .map { case (sentence, tree) => (sentence.toString, RNNCoreAnnotations.getPredictedClass(tree)) }
+//      .toList
+//  }
 
 }
