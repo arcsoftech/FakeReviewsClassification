@@ -75,7 +75,7 @@ def analyzeSentiment: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s
     //calculating average sentiment score for the product
     val product_avg_sentiment_score_df = reviews_df3.select("product_id", "sentiment")
     val asinSentimentMap = product_avg_sentiment_score_df.columns.map((_ -> "mean")).toMap
-    val product_avg_sentiment_score_df1 = product_avg_sentiment_score_df.groupBy('asin).agg(asinSentimentMap);
+    val product_avg_sentiment_score_df1 = product_avg_sentiment_score_df.groupBy("product_id").agg(asinSentimentMap);
     product_avg_sentiment_score_df1.show()
     product_avg_sentiment_score_df1.cache()
 
@@ -87,7 +87,7 @@ def analyzeSentiment: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s
     //calculating average overall review score for the product
     val product_avg_overall_df = reviews_df3.select("product_id", "star_rating")
     val asinOverallMap = product_avg_overall_df.columns.map((_ -> "mean")).toMap
-    val product_avg_overall_df1 = product_avg_overall_df.groupBy('asin).agg(asinOverallMap);
+    val product_avg_overall_df1 = product_avg_overall_df.groupBy("product_id").agg(asinOverallMap);
     product_avg_overall_df1.show()
 
     val product_avg_overall_df2 = product_avg_overall_df1.drop("avg(product_id)")
@@ -111,18 +111,9 @@ def analyzeSentiment: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s
     val reviews_df7 = reviews_df6.withColumn("overallDelta" , deltaUdf(reviews_df6("avg(star_rating)"),reviews_df6("star_rating")))
 
 
-
-    def computeHelpfulColumn(wrappedaArr: mutable.WrappedArray[BigDecimal]): Double = {
-      val test = wrappedaArr.toString();
-
-      val numPattern = new Regex("(\\d+)")
-      val matches = numPattern.findAllIn(test).toArray.map(_.toDouble);
-
-      if( matches(2) == 0 ){
-        return 0.0
-      }else{
-        matches(0)/matches(2)
-      }
+ // It was computing a/b in old datasets becuase helpful comumn was array .
+    def computeHelpfulColumn(stringInt: BigDecimal) : Double = {
+      stringInt.toDouble
     }
     val computeHelpfulUdf = udf(computeHelpfulColumn _)
 
