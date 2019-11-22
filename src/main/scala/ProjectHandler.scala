@@ -111,9 +111,9 @@ def analyzeSentiment: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s
     val reviews_df7 = reviews_df6.withColumn("overallDelta" , deltaUdf(reviews_df6("avg(star_rating)"),reviews_df6("star_rating")))
 
 
- // It was computing a/b in old datasets becuase helpful comumn was array .
-    def computeHelpfulColumn(stringInt: BigDecimal) : Double = {
-      stringInt.toDouble
+    // It was computing a/b in old datasets becuase helpful comumn was array .
+    def computeHelpfulColumn(stringInt: Int) : Double = {
+      stringInt*1.0
     }
     val computeHelpfulUdf = udf(computeHelpfulColumn _)
 
