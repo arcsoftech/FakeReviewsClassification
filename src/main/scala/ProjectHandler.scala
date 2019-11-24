@@ -44,21 +44,23 @@ object ProjectHandler {
 
     val analyzeSentimentUDF = udf(analyzeSentiment)
 
-    val sentiment_df1 = reviews_text_df.withColumn("sentiment", analyzeSentimentUDF(reviews_text_df("review_body")))
-    val sentiment_df2 = sentiment_df1.select("review_id", "sentiment")
+    //val sentiment_df1 = reviews_text_df.withColumn("sentiment", analyzeSentimentUDF(reviews_text_df("review_body")))
+    //val sentiment_df2 = sentiment_df1.select("review_id", "sentiment")
 
-    sentiment_df2.cache();
+    //sentiment_df2.cache();
 
     //Dropping text review column after extracting sentiment
-    val reviews_df2 = reviews_df1.select("review_id", "product_id", "helpful_votes", "star_rating", "customer_id", "review_date");
+    val reviews_df2 = reviews_df1.select("review_id", "product_id", "helpful_votes", "star_rating", "customer_id", "review_date", "review_body");
 
     reviews_df2.cache()
     reviews_df2.show()
 
     //Adding calculated sentiment value for each review
-    val reviews_df3 = reviews_df2.join(sentiment_df2, "review_id")
+    //val reviews_df3 = reviews_df2.join(sentiment_df2, "review_id")
+    print("************* Sentiment Table ****************")
+    val reviews_df3 = reviews_df2.withColumn("sentiment", analyzeSentimentUDF(reviews_text_df("review_body"))).cache.drop("review_body")
+    reviews_df3.cache()
     reviews_df3.show()
-    reviews_df3.cache();
 
     //calculating average sentiment score for the product
     val product_avg_sentiment_score_df = reviews_df3.select("product_id", "sentiment")
