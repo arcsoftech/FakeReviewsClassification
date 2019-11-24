@@ -35,6 +35,4 @@ object SentimentAnalyzer {
       .map { case (sentence, tree) => (sentence.toString, RNNCoreAnnotations.getPredictedClass(tree)) }
       .toList
   }
-
-
 }
