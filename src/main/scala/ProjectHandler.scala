@@ -1,25 +1,18 @@
+import SentimentAnalyzer.extractSentiment
 import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StructField, StructType}
-import org.apache.spark.sql.{Row, SaveMode, SparkSession, types}
+import org.apache.spark.sql.{Column, ColumnName, Row, SaveMode, SparkSession, types}
 import org.apache.spark.{SparkConf, SparkContext}
-import scala.collection.mutable
+import org.apache.spark.ml.feature.VectorAssembler
+import org.apache.spark.ml.linalg.DenseVector
+import org.apache.spark.ml.evaluation._
+import org.apache.spark.sql.functions._
 
 object ProjectHandler {
   def main(args: Array[String]): Unit = {
 
     Logger.getRootLogger.setLevel(Level.WARN)
 
-    if (args.length < 2) {
-      println("Usage:  InputFilePath OutputFilePath")
-      System.exit(1)
-    }
-
-    val inputFilePath = args(0)
-    val outputFilePath = args(1)
-
-
-    // create Spark context with Spark configuration
-    //    val sparkConf = new SparkConf().setMaster("local[2]").setAppName("ProjectMain");   //Local
     val sparkConf = new SparkConf().setAppName("FakeReviewsClassification").set("spark.sql.broadcastTimeout","36000");                       //AWS
 
     val sc = new SparkContext(sparkConf)
@@ -30,21 +23,31 @@ object ProjectHandler {
       .getOrCreate()
 
     sc.setLogLevel("ERROR")
+    if (args.length < 2) {
+      println("Usage:  InputFilePath OutputFilePath")
+      System.exit(1)
+    }
 
-    import org.apache.spark.sql.functions._
+    val inputFilePath = args(0)
+    val outputFilePath = args(1)
+
+
+
     import sparkSession.implicits._
-    import scala.util.matching.Regex
-    import org.apache.spark.ml.feature.VectorAssembler
-    import org.apache.spark.ml.linalg.DenseVector
-    import org.apache.spark.ml.evaluation._
+
 
 
     val raw_reviews_df = sparkSession.read.option("inferSchema", "true").option("header", "true").csv(inputFilePath)
 
     val generateCompositeId = udf( (first: String, second: String, third: String) => { first + "_" + second + "_" + third } )
 
+
+    def uniqueIdGenerator(productId: ColumnName, customerId:ColumnName, reviewId:ColumnName): Column =  {
+      productId + "_" + customerId + "_" + reviewId
+    }
+
     //generating ids for each review
-    val reviews_df1  = raw_reviews_df.withColumn("review_id", generateCompositeId($"product_id", $"customer_id", $"review_date"))
+    val reviews_df1  = raw_reviews_df.withColumn("review_id", uniqueIdGenerator($"product_id", $"customer_id", $"review_date"))
 
     reviews_df1.cache();
 
@@ -192,33 +195,6 @@ def analyzeSentiment: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s
     cluster_silhouette_df.coalesce(1).write.mode(SaveMode.Overwrite).csv(outputFilePath + "_silhouette_cluster");
 
 
-  } //end of main
-
-  //NLP Properties
-//  val props = new Properties()
-//  props.setProperty("annotators", "tokenize, ssplit, parse, sentiment")
-//  val pipeline: StanfordCoreNLP = new StanfordCoreNLP(props)
-//
-//  def mainSentiment(input: String): Int = Option(input) match {
-//    case Some(text) if !text.isEmpty => {
-//      var sentiment:Int  = extractSentiment(text)
-//      return sentiment }
-//    case _ => throw new IllegalArgumentException("input can't be null or empty")
-//  }
-//
-//  private def extractSentiment(text: String): Int = {
-//    val (_, sentiment) = extractSentiments(text)
-//      .maxBy { case (sentence, _) => sentence.length }
-//    sentiment
-//  }
-//
-//  def extractSentiments(text: String): List[(String, Int)] = {
-//    val annotation: Annotation = pipeline.process(text)
-//    val sentences = annotation.get(classOf[CoreAnnotations.SentencesAnnotation])
-//    sentences
-//      .map(sentence => (sentence, sentence.get(classOf[SentimentCoreAnnotations.SentimentAnnotatedTree])))
-//      .map { case (sentence, tree) => (sentence.toString, RNNCoreAnnotations.getPredictedClass(tree)) }
-//      .toList
-//  }
+  }
 
 }
