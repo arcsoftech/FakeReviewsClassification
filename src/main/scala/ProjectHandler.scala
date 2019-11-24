@@ -10,19 +10,18 @@ import org.apache.spark.sql.functions._
 
 object ProjectHandler {
   def main(args: Array[String]): Unit = {
-
     Logger.getRootLogger.setLevel(Level.WARN)
 
     val sparkConf = new SparkConf().setAppName("FakeReviewsClassification").set("spark.sql.broadcastTimeout", "36000"); //AWS
-
     val sc = new SparkContext(sparkConf)
-
     val sparkSession = SparkSession.builder
       .config(conf = sparkConf)
       .appName("FakeReviewsClassification")
       .getOrCreate()
+    import sparkSession.implicits._
 
     sc.setLogLevel("ERROR")
+
     if (args.length < 2) {
       println("Usage:  InputFilePath OutputFilePath")
       System.exit(1)
@@ -31,22 +30,12 @@ object ProjectHandler {
     val inputFilePath = args(0)
     val outputFilePath = args(1)
 
-
-    import sparkSession.implicits._
-
-
     val raw_reviews_df = sparkSession.read.option("inferSchema", "true").option("header", "true").csv(inputFilePath)
-
-    val generateCompositeId = udf((first: String, second: String, third: String) => {
-      first + "_" + second + "_" + third
-    })
-
 
     def uniqueIdGenerator(productId: ColumnName, customerId: ColumnName, reviewId: ColumnName): Column = {
       productId + "_" + customerId + "_" + reviewId
     }
 
-    //generating ids for each review
     val reviews_df1 = raw_reviews_df.withColumn("review_id", uniqueIdGenerator($"product_id", $"customer_id", $"review_date"))
 
     reviews_df1.cache();
@@ -69,30 +58,25 @@ object ProjectHandler {
     reviews_df2.cache()
     reviews_df2.show()
 
-
     //Adding calculated sentiment value for each review
     val reviews_df3 = reviews_df2.join(sentiment_df2, "review_id")
     reviews_df3.show()
     reviews_df3.cache();
 
-
-
     //calculating average sentiment score for the product
     val product_avg_sentiment_score_df = reviews_df3.select("product_id", "sentiment")
-    val asinSentimentMap = product_avg_sentiment_score_df.columns.map((_ -> "mean")).toMap
-    val product_avg_sentiment_score_df1 = product_avg_sentiment_score_df.groupBy("product_id").agg(asinSentimentMap);
+    val productIdSentimentMap = product_avg_sentiment_score_df.columns.map((_ -> "mean")).toMap
+    val product_avg_sentiment_score_df1 = product_avg_sentiment_score_df.groupBy("product_id").agg(productIdSentimentMap);
     product_avg_sentiment_score_df1.show()
     product_avg_sentiment_score_df1.cache()
 
     val product_avg_sentiment_score_df2 = product_avg_sentiment_score_df1.drop("avg(product_id)")
-
-
     println("product_avg_sentiment_score_df2 completed");
 
     //calculating average overall review score for the product
     val product_avg_overall_df = reviews_df3.select("product_id", "star_rating")
-    val asinOverallMap = product_avg_overall_df.columns.map((_ -> "mean")).toMap
-    val product_avg_overall_df1 = product_avg_overall_df.groupBy("product_id").agg(asinOverallMap);
+    val productidOverallMap = product_avg_overall_df.columns.map((_ -> "mean")).toMap
+    val product_avg_overall_df1 = product_avg_overall_df.groupBy("product_id").agg(productidOverallMap);
     product_avg_overall_df1.show()
 
     val product_avg_overall_df2 = product_avg_overall_df1.drop("avg(product_id)")
@@ -190,14 +174,10 @@ object ProjectHandler {
       val spammer_df3 = spammer_df2.select("review_id", "product_id", "customer_id", "prediction", "normal")
 
       spammer_df3.coalesce(1).write.mode(SaveMode.Overwrite).csv(outputFilePath + "_" + a);
-
-
       cluster_silhouette_df.show()
     }
 
     cluster_silhouette_df.coalesce(1).write.mode(SaveMode.Overwrite).csv(outputFilePath + "_silhouette_cluster");
-
-
   }
 
 }
