@@ -32,13 +32,10 @@ object ProjectHandler {
 
     val raw_reviews_df = sparkSession.read.option("inferSchema", "true").option("header", "true").csv(inputFilePath)
 
-    def uniqueIdGenerator(productId: ColumnName, customerId: ColumnName, reviewId: ColumnName): Column = {
-      productId + "_" + customerId + "_" + reviewId
-    }
+    val uniqueIdGenerator = udf( (product_id: String, customer_id: String, review_date: String) => { product_id + "_" + customer_id + "_" + review_date } )
 
     val reviews_df1 = raw_reviews_df.withColumn("review_id", uniqueIdGenerator($"product_id", $"customer_id", $"review_date"))
-
-    reviews_df1.cache();
+    reviews_df1.cache()
 
     // Extracting Sentiment value for each review
     val reviews_text_df = reviews_df1.select("review_id", "review_body")
@@ -80,12 +77,8 @@ object ProjectHandler {
     product_avg_overall_df1.show()
 
     val product_avg_overall_df2 = product_avg_overall_df1.drop("avg(product_id)")
-
     val reviews_df4 = reviews_df3.join(product_avg_sentiment_score_df2, Seq("product_id"))
-
-
     val reviews_df5 = reviews_df4.join(product_avg_overall_df2, Seq("product_id"))
-
 
     //Used to calculate how specific instance is different from group average
     def deltaFunc(avgValue: Double, specificValue: Double): Double = {
@@ -93,10 +86,7 @@ object ProjectHandler {
     }
 
     def deltaUdf = udf(deltaFunc _)
-
-
     val reviews_df6 = reviews_df5.withColumn("sentimentDelta", deltaUdf(reviews_df5("avg(sentiment)"), reviews_df5("sentiment")))
-
     val reviews_df7 = reviews_df6.withColumn("overallDelta", deltaUdf(reviews_df6("avg(star_rating)"), reviews_df6("star_rating")))
 
 
@@ -106,7 +96,6 @@ object ProjectHandler {
     }
 
     val computeHelpfulUdf = udf(computeHelpfulColumn _)
-
     val reviews_df8 = reviews_df7.withColumn("helpful_ratio", computeHelpfulUdf($"helpful_votes"))
 
 
@@ -115,7 +104,6 @@ object ProjectHandler {
       .setOutputCol("features")
 
     val featuresDF = assembler.transform(reviews_df8)
-
     println("Feature combined using VectorAssembler")
     featuresDF.show()
 
