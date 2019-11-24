@@ -13,7 +13,7 @@ object ProjectHandler {
 
     Logger.getRootLogger.setLevel(Level.WARN)
 
-    val sparkConf = new SparkConf().setAppName("FakeReviewsClassification").set("spark.sql.broadcastTimeout","36000");                       //AWS
+    val sparkConf = new SparkConf().setAppName("FakeReviewsClassification").set("spark.sql.broadcastTimeout", "36000"); //AWS
 
     val sc = new SparkContext(sparkConf)
 
@@ -32,29 +32,31 @@ object ProjectHandler {
     val outputFilePath = args(1)
 
 
-
     import sparkSession.implicits._
-
 
 
     val raw_reviews_df = sparkSession.read.option("inferSchema", "true").option("header", "true").csv(inputFilePath)
 
-    val generateCompositeId = udf( (first: String, second: String, third: String) => { first + "_" + second + "_" + third } )
+    val generateCompositeId = udf((first: String, second: String, third: String) => {
+      first + "_" + second + "_" + third
+    })
 
 
-    def uniqueIdGenerator(productId: ColumnName, customerId:ColumnName, reviewId:ColumnName): Column =  {
+    def uniqueIdGenerator(productId: ColumnName, customerId: ColumnName, reviewId: ColumnName): Column = {
       productId + "_" + customerId + "_" + reviewId
     }
 
     //generating ids for each review
-    val reviews_df1  = raw_reviews_df.withColumn("review_id", uniqueIdGenerator($"product_id", $"customer_id", $"review_date"))
+    val reviews_df1 = raw_reviews_df.withColumn("review_id", uniqueIdGenerator($"product_id", $"customer_id", $"review_date"))
 
     reviews_df1.cache();
 
     // Extracting Sentiment value for each review
     val reviews_text_df = reviews_df1.select("review_id", "review_body")
-def analyzeSentiment: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s) }
- val analyzeSentimentUDF = udf(analyzeSentiment)
+
+    def analyzeSentiment: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s) }
+
+    val analyzeSentimentUDF = udf(analyzeSentiment)
 
     val sentiment_df1 = reviews_text_df.withColumn("sentiment", analyzeSentimentUDF(reviews_text_df("review_body")))
     val sentiment_df2 = sentiment_df1.select("review_id", "sentiment")
@@ -62,14 +64,14 @@ def analyzeSentiment: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s
     sentiment_df2.cache();
 
     //Dropping text review column after extracting sentiment
-    val reviews_df2 = reviews_df1.select("review_id","product_id","helpful_votes","star_rating","customer_id","review_date");
+    val reviews_df2 = reviews_df1.select("review_id", "product_id", "helpful_votes", "star_rating", "customer_id", "review_date");
 
     reviews_df2.cache()
     reviews_df2.show()
 
 
     //Adding calculated sentiment value for each review
-    val reviews_df3 = reviews_df2.join(sentiment_df2 ,"review_id")
+    val reviews_df3 = reviews_df2.join(sentiment_df2, "review_id")
     reviews_df3.show()
     reviews_df3.cache();
 
@@ -95,29 +97,30 @@ def analyzeSentiment: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s
 
     val product_avg_overall_df2 = product_avg_overall_df1.drop("avg(product_id)")
 
-    val reviews_df4 = reviews_df3.join(product_avg_sentiment_score_df2 ,Seq("product_id"))
+    val reviews_df4 = reviews_df3.join(product_avg_sentiment_score_df2, Seq("product_id"))
 
 
-    val reviews_df5 = reviews_df4.join(product_avg_overall_df2 ,Seq("product_id"))
+    val reviews_df5 = reviews_df4.join(product_avg_overall_df2, Seq("product_id"))
 
 
     //Used to calculate how specific instance is different from group average
-    def deltaFunc (avgValue: Double, specificValue:Double) :Double = {
+    def deltaFunc(avgValue: Double, specificValue: Double): Double = {
       math.abs(avgValue - specificValue)
     }
 
     def deltaUdf = udf(deltaFunc _)
 
 
-    val reviews_df6 = reviews_df5.withColumn("sentimentDelta" , deltaUdf(reviews_df5("avg(sentiment)"),reviews_df5("sentiment")))
+    val reviews_df6 = reviews_df5.withColumn("sentimentDelta", deltaUdf(reviews_df5("avg(sentiment)"), reviews_df5("sentiment")))
 
-    val reviews_df7 = reviews_df6.withColumn("overallDelta" , deltaUdf(reviews_df6("avg(star_rating)"),reviews_df6("star_rating")))
+    val reviews_df7 = reviews_df6.withColumn("overallDelta", deltaUdf(reviews_df6("avg(star_rating)"), reviews_df6("star_rating")))
 
 
     // It was computing a/b in old datasets becuase helpful comumn was array .
-    def computeHelpfulColumn(stringInt: Int) : Double = {
-      stringInt*1.0
+    def computeHelpfulColumn(stringInt: Int): Double = {
+      stringInt * 1.0
     }
+
     val computeHelpfulUdf = udf(computeHelpfulColumn _)
 
     val reviews_df8 = reviews_df7.withColumn("helpful_ratio", computeHelpfulUdf($"helpful_votes"))
@@ -149,13 +152,13 @@ def analyzeSentiment: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s
 
 
     var schema = types.StructType(
-      StructField("cluster" , IntegerType, false) ::
+      StructField("cluster", IntegerType, false) ::
         StructField("silhouette", DoubleType, false) :: Nil)
 
-    var cluster_silhouette_df = sparkSession.createDataFrame(sc.emptyRDD[Row],schema)
+    var cluster_silhouette_df = sparkSession.createDataFrame(sc.emptyRDD[Row], schema)
 
 
-    for( a <- 2 to 50){
+    for (a <- 2 to 50) {
 
       val gmm = new GaussianMixture()
         .setK(a).setFeaturesCol("scaledFeatures")
@@ -167,7 +170,7 @@ def analyzeSentiment: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s
       val silhouette = evaluator.evaluate(predictions);
       println("silhouette value " + silhouette + " for clustering size " + a);
 
-      val newRow = Seq((a ,silhouette)).toDF("cluster", "silhouette");
+      val newRow = Seq((a, silhouette)).toDF("cluster", "silhouette");
       cluster_silhouette_df = cluster_silhouette_df.union(newRow)
 
 
@@ -184,7 +187,7 @@ def analyzeSentiment: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s
       spammer_df.show();
 
       val spammer_df2 = spammer_df.columns.foldLeft(spammer_df)((current, c) => current.withColumn(c, col(c).cast("String")))
-      val spammer_df3 = spammer_df2.select("review_id","product_id", "customer_id", "prediction", "normal")
+      val spammer_df3 = spammer_df2.select("review_id", "product_id", "customer_id", "prediction", "normal")
 
       spammer_df3.coalesce(1).write.mode(SaveMode.Overwrite).csv(outputFilePath + "_" + a);
 
