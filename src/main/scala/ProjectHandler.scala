@@ -28,8 +28,8 @@ object ProjectHandler {
 
 
     // create Spark context with Spark configuration
-    //    val sparkConf = new SparkConf().setMaster("local[2]").setAppName("ProjectMain");   //Local
-    val sparkConf = new SparkConf().setAppName("FakeReviewsClassification");                       //AWS
+    val sparkConf = new SparkConf().setMaster("local[2]").setAppName("ProjectMain");   //Local
+    //val sparkConf = new SparkConf().setAppName("FakeReviewsClassification").config("spark.sql.broadcastTimeout", "36000");                       //AWS
 
     val sc = new SparkContext(sparkConf)
 
@@ -48,7 +48,7 @@ object ProjectHandler {
     import org.apache.spark.ml.evaluation._
 
 
-    val raw_reviews_df = sparkSession.read.csv(inputFilePath)
+    val raw_reviews_df = sparkSession.read.format("csv").option("header", "true").load(inputFilePath)
 
     val generateCompositeId = udf( (first: String, second: String, third: String) => { first + "_" + second + "_" + third } )
 
@@ -84,7 +84,7 @@ object ProjectHandler {
     //calculating average sentiment score for the product
     val product_avg_sentiment_score_df = reviews_df3.select("product_id", "sentiment")
     val asinSentimentMap = product_avg_sentiment_score_df.columns.map((_ -> "mean")).toMap
-    val product_avg_sentiment_score_df1 = product_avg_sentiment_score_df.groupBy('asin).agg(asinSentimentMap);
+    val product_avg_sentiment_score_df1 = product_avg_sentiment_score_df.groupBy('product_id).agg(asinSentimentMap);
     product_avg_sentiment_score_df1.show()
     product_avg_sentiment_score_df1.cache()
 
@@ -96,7 +96,7 @@ object ProjectHandler {
     //calculating average overall review score for the product
     val product_avg_overall_df = reviews_df3.select("product_id", "star_rating")
     val asinOverallMap = product_avg_overall_df.columns.map((_ -> "mean")).toMap
-    val product_avg_overall_df1 = product_avg_overall_df.groupBy('asin).agg(asinOverallMap);
+    val product_avg_overall_df1 = product_avg_overall_df.groupBy('product_id).agg(asinOverallMap);
     product_avg_overall_df1.show()
 
     val product_avg_overall_df2 = product_avg_overall_df1.drop("avg(product_id)")
@@ -121,17 +121,8 @@ object ProjectHandler {
 
 
 
-    def computeHelpfulColumn(wrappedaArr: mutable.WrappedArray[BigDecimal]): Double = {
-      val test = wrappedaArr.toString();
-
-      val numPattern = new Regex("(\\d+)")
-      val matches = numPattern.findAllIn(test).toArray.map(_.toDouble);
-
-      if( matches(2) == 0 ){
-        return 0.0
-      }else{
-        matches(0)/matches(2)
-      }
+    def computeHelpfulColumn(stringInt: Int): Double = {
+      stringInt * 1.0
     }
     val computeHelpfulUdf = udf(computeHelpfulColumn _)
 
