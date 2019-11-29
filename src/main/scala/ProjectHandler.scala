@@ -39,7 +39,12 @@ object ProjectHandler {
 
     val input = args(0)
     val output = args(1)
-    val printFlag:Boolean = args(2).asInstanceOf[Boolean]
+    var printFlag = true
+    if(args(2) == 0)
+    {
+      printFlag = false
+    }
+    
 
     val original_df = sparkSession.read.option("inferSchema", "true").option("header", "true").csv(input)
 
