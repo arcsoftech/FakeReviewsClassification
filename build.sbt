@@ -15,7 +15,6 @@ libraryDependencies ++= Seq(
   "org.scala-lang" % "scala-library" % "2.11.12",
   "edu.stanford.nlp" % "stanford-corenlp" % "3.9.2" artifacts (Artifact("stanford-corenlp", "models"), Artifact("stanford-corenlp"))
 )
-
 assemblyMergeStrategy in assembly := {
   case PathList("META-INF" , xs @ _*) => MergeStrategy.discard
   case x => MergeStrategy.first

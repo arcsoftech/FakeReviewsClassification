@@ -93,19 +93,19 @@ object ProjectHandler {
 
 
 
-    def computeHelpfulColumn(stringInt: Int): Double = {
-      stringInt * 1.0
-    }
-
-    val computeHelpfulUdf = udf(computeHelpfulColumn _)
-    val reviews_df8 = reviews_df7.withColumn("helpful_ratio", computeHelpfulUdf($"helpful_votes"))
+//    def computeHelpfulColumn(stringInt: Int): Double = {
+//      stringInt * 1.0
+//    }
+//
+//    val computeHelpfulUdf = udf(computeHelpfulColumn _)
+//    val reviews_df8 = reviews_df7.withColumn("helpful_ratio", computeHelpfulUdf($"helpful_votes"))
 
 
     val assembler = new VectorAssembler()
-      .setInputCols(Array("overallDelta", "sentimentDelta", "helpful_ratio"))
+      .setInputCols(Array("overallDelta", "sentimentDelta", "helpful_votes"))
       .setOutputCol("features")
 
-    val featuresDF = assembler.transform(reviews_df8)
+    val featuresDF = assembler.transform(reviews_df7)
     println("Feature combined using VectorAssembler")
     featuresDF.show()
 
