@@ -1,3 +1,4 @@
+// Helper module to compute sentiment score using standford nlp
 import java.util.Properties
 
 import edu.stanford.nlp.ling.CoreAnnotations
@@ -18,7 +19,7 @@ object SentimentAnalyzer {
     case Some(text) if !text.isEmpty => {
       var sentiment:Int  = extractSentiment(text)
       return sentiment }
-    case _ => throw new IllegalArgumentException("input can't be null or empty")
+    case _ => throw new IllegalArgumentException("Invalid Input")
   }
 
   private def extractSentiment(text: String): Int = {

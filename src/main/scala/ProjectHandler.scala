@@ -1,16 +1,26 @@
+
+
+// Scala Project to compute fake vs legitimate review using gaussian mixture model.
+// Group Member:
+// Arihant
+// Anish
+// Pawan
+// Shobhit
+
 import SentimentAnalyzer.extractSentiment
-import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StructField, StructType}
+import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{Column, ColumnName, Row, SaveMode, SparkSession, types}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.ml.linalg.DenseVector
+import org.apache.spark.ml.feature.MinMaxScaler
+import org.apache.spark.ml.clustering.GaussianMixture
 import org.apache.spark.ml.evaluation._
-import org.apache.spark.sql.functions._
+
 
 object ProjectHandler {
   def main(args: Array[String]): Unit = {
-    Logger.getRootLogger.setLevel(Level.WARN)
 
     val sparkConf = new SparkConf().setAppName("FakeReviewsClassification").set("spark.sql.broadcastTimeout", "36000"); //AWS
     val sc = new SparkContext(sparkConf)
@@ -23,129 +33,126 @@ object ProjectHandler {
     sc.setLogLevel("ERROR")
 
     if (args.length < 2) {
-      println("Usage:  InputFilePath OutputFilePath")
+      println("Usage:  Input Output")
       System.exit(1)
     }
 
-    val inputFilePath = args(0)
-    val outputFilePath = args(1)
+    val input = args(0)
+    val output = args(1)
+    val printFlag:Boolean = args(2).asInstanceOf[Boolean]
 
-    val raw_reviews_df = sparkSession.read.option("inferSchema", "true").option("header", "true").csv(inputFilePath)
+    val original_df = sparkSession.read.option("inferSchema", "true").option("header", "true").csv(input)
 
-    val uniqueIdGenerator = udf( (product_id: String, customer_id: String, review_date: String) => { product_id + "_" + customer_id + "_" + review_date } )
+    val uniqueIdGenerator = udf((product_id: String, customer_id: String, review_date: String) => {
+      product_id + "_" + customer_id + "_" + review_date
+    })
 
-    val reviews_df1 = raw_reviews_df.withColumn("review_id", uniqueIdGenerator($"product_id", $"customer_id", $"review_date"))
-    reviews_df1.cache()
+    val computed_df1 = original_df.withColumn("review_id", uniqueIdGenerator($"product_id", $"customer_id", $"review_date"))
+    computed_df1.cache()
 
-    // Extracting Sentiment value for each review
-    val reviews_text_df = reviews_df1.select("review_id", "review_body")
+    // computing sentiment review
 
-    def analyzeSentiment: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s) }
+    val reviews_text_df = computed_df1.select("review_id", "review_body")
 
-    val analyzeSentimentUDF = udf(analyzeSentiment)
+    def sentimentAnalysis: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s) }
 
-    //val sentiment_df1 = reviews_text_df.withColumn("sentiment", analyzeSentimentUDF(reviews_text_df("review_body")))
-    //val sentiment_df2 = sentiment_df1.select("review_id", "sentiment")
-
-    //sentiment_df2.cache();
+    val sentimentAnalysisUDF = udf(sentimentAnalysis)
 
     //Dropping text review column after extracting sentiment
-    val reviews_df2 = reviews_df1.select("review_id", "product_id", "helpful_votes", "star_rating", "customer_id", "review_date", "review_body");
+    val computed_df2 = computed_df1.select("review_id", "product_id", "helpful_votes", "star_rating", "customer_id", "review_date", "review_body");
 
-    reviews_df2.cache()
-    reviews_df2.show()
+    computed_df2.cache()
+    if (printFlag) {
+      computed_df2.show()
+    }
 
-    //Adding calculated sentiment value for each review
-    //val reviews_df3 = reviews_df2.join(sentiment_df2, "review_id")
-    print("************* Sentiment Table ****************")
-    val reviews_df3 = reviews_df2.withColumn("sentiment", analyzeSentimentUDF(reviews_text_df("review_body"))).cache.drop("review_body")
-    reviews_df3.cache()
-    reviews_df3.show()
 
-    //calculating average sentiment score for the product
-    val product_avg_sentiment_score_df = reviews_df3.select("product_id", "sentiment","star_rating")
-    val productIdSentimentMap = product_avg_sentiment_score_df.columns.map((_ -> "mean")).toMap
-    val product_avg_sentiment_score_df1 = product_avg_sentiment_score_df.groupBy("product_id").agg(productIdSentimentMap);
-    product_avg_sentiment_score_df1.show()
-    product_avg_sentiment_score_df1.cache()
+    // Gnerating sentiment column.
 
-    val product_avg_sentiment_score_df2 = product_avg_sentiment_score_df1.drop("avg(product_id)")
-    println("product_avg_sentiment_score_df2 completed");
+    val computed_df3 = computed_df2.withColumn("sentiment", sentimentAnalysisUDF(reviews_text_df("review_body"))).cache.drop("review_body")
+    computed_df3.cache()
+    if (printFlag) {
+      computed_df3.show()
+    }
 
-    //calculating average overall review score for the product
-//    val product_avg_overall_df = reviews_df3.select("product_id", "star_rating")
-//    val productidOverallMap = product_avg_overall_df.columns.map((_ -> "mean")).toMap
-//    val product_avg_overall_df1 = product_avg_overall_df.groupBy("product_id").agg(productidOverallMap);
-//    product_avg_overall_df1.show()
-//
-//    val product_avg_overall_df2 = product_avg_overall_df1.drop("avg(product_id)")
-    val reviews_df5 = reviews_df3.join(product_avg_sentiment_score_df2, Seq("product_id"))
-//    val reviews_df5 = reviews_df4.join(product_avg_overall_df2, Seq("product_id"))
 
-    //Used to calculate how specific instance is different from group average
-    def deltaFunc(avgValue: Double, specificValue: Double): Double = {
+    // Find average sentiment score  and average rating for each product
+
+    val average_sentiment_rating_score_df = computed_df3.select("product_id", "sentiment", "star_rating")
+    val productIdSentimentMap = average_sentiment_rating_score_df.columns.map((_ -> "mean")).toMap
+    val average_sentiment_rating_score_df1 = average_sentiment_rating_score_df.groupBy("product_id").agg(productIdSentimentMap);
+    average_sentiment_rating_score_df1.cache()
+    if (printFlag) {
+      average_sentiment_rating_score_df1.show()
+    }
+
+
+    val average_sentiment_rating_score_df2 = average_sentiment_rating_score_df1.drop("avg(product_id)")
+
+
+    val computed_df5 = computed_df3.join(average_sentiment_rating_score_df2, Seq("product_id"))
+    
+    // Function to compute the distance of each datapoint from its mean.S
+    def meanDistance(avgValue: Double, specificValue: Double): Double = {
       math.abs(avgValue - specificValue)
     }
 
-    def deltaUdf = udf(deltaFunc _)
-    val reviews_df6 = reviews_df5.withColumn("sentimentDelta", deltaUdf(reviews_df5("avg(sentiment)"), reviews_df5("sentiment")))
-    val reviews_df7 = reviews_df6.withColumn("overallDelta", deltaUdf(reviews_df6("avg(star_rating)"), reviews_df6("star_rating")))
+    def meanDistanceUDF = udf(meanDistance _)
 
+    val computed_df6 = computed_df5.withColumn("sentimentDelta", meanDistanceUDF(computed_df5("avg(sentiment)"), computed_df5("sentiment")))
+    val computed_df7 = computed_df6.withColumn("overallDelta", meanDistanceUDF(computed_df6("avg(star_rating)"), computed_df6("star_rating")))
+    
 
-
-//    def computeHelpfulColumn(stringInt: Int): Double = {
-//      stringInt * 1.0
-//    }
-//
-//    val computeHelpfulUdf = udf(computeHelpfulColumn _)
-//    val reviews_df8 = reviews_df7.withColumn("helpful_ratio", computeHelpfulUdf($"helpful_votes"))
-
-
+    // Generate feature vector
     val assembler = new VectorAssembler()
       .setInputCols(Array("overallDelta", "sentimentDelta", "helpful_votes"))
       .setOutputCol("features")
 
-    val featuresDF = assembler.transform(reviews_df7)
-    println("Feature combined using VectorAssembler")
-    featuresDF.show()
+    val featuresDF = assembler.transform(computed_df7)
+    if (printFlag) {
+      println("Feature combined using VectorAssembler")
+      featuresDF.show()
+    }
 
-    import org.apache.spark.ml.feature.MinMaxScaler
 
+    // Min Max Standardization
     val scaler = new MinMaxScaler()
       .setInputCol("features")
-      .setOutputCol("scaledFeatures")
+      .setOutputCol("standardizedfeatures")
 
     val scalerModel = scaler.fit(featuresDF)
 
     val scaledData = scalerModel.transform(featuresDF)
-    println(s"Features scaled to range: [${scaler.getMin}, ${scaler.getMax}]")
 
-    scaledData.show()
+    if (printFlag) {
+      println(s"Features scaled to range: [${scaler.getMin}, ${scaler.getMax}]")
+      scaledData.show()
+    }
 
-    import org.apache.spark.ml.clustering.GaussianMixture
 
-
-    var schema = types.StructType(
+    // custom csvSchema defined for csv
+    var csvSchema = types.StructType(
       StructField("cluster", IntegerType, false) ::
-        StructField("silhouette", DoubleType, false) :: Nil)
+        StructField("silhouette_score", DoubleType, false) :: Nil)
 
-    var cluster_silhouette_df = sparkSession.createDataFrame(sc.emptyRDD[Row], schema)
+    var clusterSilhouette_df = sparkSession.createDataFrame(sc.emptyRDD[Row], csvSchema)
 
 
+    // Compute silhouette_score value against K clusters ranging from 2 to 50
     for (a <- 2 to 50) {
 
-      val gmm = new GaussianMixture()
-        .setK(a).setFeaturesCol("scaledFeatures")
+      val gausian_mixture_model = new GaussianMixture()
+        .setK(a).setFeaturesCol("standardizedfeatures")
 
-      val model = gmm.fit(scaledData)
+      val model = gausian_mixture_model.fit(scaledData)
       val predictions = model.transform(scaledData)
 
       val evaluator = new ClusteringEvaluator().setDistanceMeasure("cosine")
-      val silhouette = evaluator.evaluate(predictions);
-      println("silhouette value " + silhouette + " for clustering size " + a);
+      val silhouette_score = evaluator.evaluate(predictions);
+      println("silhouette_score value " + silhouette_score + " for K " + a);
 
-      val newRow = Seq((a, silhouette)).toDF("cluster", "silhouette");
-      cluster_silhouette_df = cluster_silhouette_df.union(newRow)
+      val newRow = Seq((a, silhouette_score)).toDF("cluster", "silhouette_score");
+      clusterSilhouette_df = clusterSilhouette_df.union(newRow)
 
 
       for (i <- 0 until model.getK) {
@@ -156,18 +163,25 @@ object ProjectHandler {
 
       val isNormal: Any => Boolean = _.asInstanceOf[DenseVector].toArray.exists(_ > 0.999)
       val isNormalUdf = udf(isNormal)
-      val spammer_df = predictions.withColumn("normal", isNormalUdf($"probability"))
+      val reviewer_fake_df = predictions.withColumn("normal", isNormalUdf($"probability"))
 
-      spammer_df.show();
+      if (printFlag) {
+        reviewer_fake_df.show();
+      }
 
-      val spammer_df2 = spammer_df.columns.foldLeft(spammer_df)((current, c) => current.withColumn(c, col(c).cast("String")))
-      val spammer_df3 = spammer_df2.select("review_id", "product_id", "customer_id", "prediction", "normal")
 
-      spammer_df3.coalesce(1).write.mode(SaveMode.Overwrite).csv(outputFilePath + "_" + a);
-      cluster_silhouette_df.show()
+      val reviewer_fake_df2 = reviewer_fake_df.columns.foldLeft(reviewer_fake_df)((current, c) => current.withColumn(c, col(c).cast("String")))
+      val reviewer_fake_df3 = reviewer_fake_df2.select("review_id", "product_id", "customer_id", "prediction", "normal")
+
+      reviewer_fake_df3.coalesce(1).write.mode(SaveMode.Overwrite).csv(output + "_" + a);
+
+      if (printFlag) {
+        clusterSilhouette_df.show()
+      }
+
     }
 
-    cluster_silhouette_df.coalesce(1).write.mode(SaveMode.Overwrite).csv(outputFilePath + "_silhouette_cluster");
+    clusterSilhouette_df.coalesce(1).write.mode(SaveMode.Overwrite).csv(output + "_silhouette_scoreVScluster");
   }
 
 }
