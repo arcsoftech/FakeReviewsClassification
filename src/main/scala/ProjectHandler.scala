@@ -147,7 +147,7 @@ object ProjectHandler {
     for (a <- 2 to 50) {
 
       val gausian_mixture_model = new GaussianMixture()
-        .setK(a).setFeaturesCol("standardizedfeatures")
+        .setK(a).setFeaturesCol("standardizedfeatures").setMaxIter(100)
 
       val model = gausian_mixture_model.fit(scaledData)
       val predictions = model.transform(scaledData)
