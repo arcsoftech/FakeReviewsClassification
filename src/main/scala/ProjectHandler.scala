@@ -63,7 +63,7 @@ object ProjectHandler {
     reviews_df3.show()
 
     //calculating average sentiment score for the product
-    val product_avg_sentiment_score_df = reviews_df3.select("product_id", "sentiment")
+    val product_avg_sentiment_score_df = reviews_df3.select("product_id", "sentiment","star_rating")
     val productIdSentimentMap = product_avg_sentiment_score_df.columns.map((_ -> "mean")).toMap
     val product_avg_sentiment_score_df1 = product_avg_sentiment_score_df.groupBy("product_id").agg(productIdSentimentMap);
     product_avg_sentiment_score_df1.show()
@@ -73,14 +73,14 @@ object ProjectHandler {
     println("product_avg_sentiment_score_df2 completed");
 
     //calculating average overall review score for the product
-    val product_avg_overall_df = reviews_df3.select("product_id", "star_rating")
-    val productidOverallMap = product_avg_overall_df.columns.map((_ -> "mean")).toMap
-    val product_avg_overall_df1 = product_avg_overall_df.groupBy("product_id").agg(productidOverallMap);
-    product_avg_overall_df1.show()
-
-    val product_avg_overall_df2 = product_avg_overall_df1.drop("avg(product_id)")
-    val reviews_df4 = reviews_df3.join(product_avg_sentiment_score_df2, Seq("product_id"))
-    val reviews_df5 = reviews_df4.join(product_avg_overall_df2, Seq("product_id"))
+//    val product_avg_overall_df = reviews_df3.select("product_id", "star_rating")
+//    val productidOverallMap = product_avg_overall_df.columns.map((_ -> "mean")).toMap
+//    val product_avg_overall_df1 = product_avg_overall_df.groupBy("product_id").agg(productidOverallMap);
+//    product_avg_overall_df1.show()
+//
+//    val product_avg_overall_df2 = product_avg_overall_df1.drop("avg(product_id)")
+    val reviews_df5 = reviews_df3.join(product_avg_sentiment_score_df2, Seq("product_id"))
+//    val reviews_df5 = reviews_df4.join(product_avg_overall_df2, Seq("product_id"))
 
     //Used to calculate how specific instance is different from group average
     def deltaFunc(avgValue: Double, specificValue: Double): Double = {
@@ -92,7 +92,7 @@ object ProjectHandler {
     val reviews_df7 = reviews_df6.withColumn("overallDelta", deltaUdf(reviews_df6("avg(star_rating)"), reviews_df6("star_rating")))
 
 
-    // It was computing a/b in old datasets becuase helpful comumn was array .
+
     def computeHelpfulColumn(stringInt: Int): Double = {
       stringInt * 1.0
     }
