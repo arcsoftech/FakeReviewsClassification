@@ -160,13 +160,13 @@ val original_df = Spark.sql(query)
       val s_width = model_evaluator.evaluate(estimated_value);
       println("silhouette width " + s_width + " for K " + k);
 
-      val newLine = Seq((k, s_width)).toDF("cluster", "s_width");
-      clusterSilhouette_df = clusterSilhouette_df.union(newLine)
+      val nextLine = Seq((k, s_width)).toDF("cluster", "s_width");
+      clusterSilhouette_df = clusterSilhouette_df.union(nextLine)
 
 
-      for (i <- 0 until model.getK) {
-        println(s"Gaussian $i:\nweight=${model.weights(i)}\n" +
-          s"mu=${model.gaussians(i).mean}\nsigma=\n${model.gaussians(i).cov}\n")
+      for (i <- 0 until gmm.getK) {
+        println(s"Gaussian $i:\nweight=${gmm.weights(i)}\n" +
+          s"mu=${gmm.gaussians(i).mean}\nsigma=\n${gmm.gaussians(i).cov}\n")
       }
 
 
