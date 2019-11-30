@@ -22,7 +22,8 @@ import org.apache.spark.ml.evaluation._
 
 object ProjectHandler {
   def main(args: Array[String]) : Unit = {
-    val sparkConf = new SparkConf().setAppName("FakeReviewsClassification").set("spark.sql.broadcastTimeout", "36000"); //AWS
+    //We are adding more timeout to battle some data frame operations on the server
+    val sparkConf = new SparkConf().setAppName("FakeReviewsClassification").set("spark.sql.broadcastTimeout", "36000")
     val sc = new SparkContext(sparkConf)
     val Spark = SparkSession.builder
       .config(conf = sparkConf)
@@ -68,7 +69,7 @@ val original_df = Spark.sql(query)
     val sentimentAnalysisUDF = udf(sentimentAnalysis)
 
 
-    val computedDataFrameB = computedDataFrameA.select("review_id", "product_id", "helpful_votes", "star_rating", "customer_id", "review_date", "review_body");
+    val computedDataFrameB = computedDataFrameA.select("review_id", "product_id", "helpful_votes", "star_rating", "customer_id", "review_date", "review_body")
 
     computedDataFrameB.cache()
     if (printFlag) {
@@ -89,7 +90,7 @@ val original_df = Spark.sql(query)
 
     val averageSentimentRatingDataFrame = computedDataFrameC.select("product_id", "sentiment", "star_rating")
     val productIdSentimentMap = averageSentimentRatingDataFrame.columns.map((_ -> "mean")).toMap
-    val averageSentimentRatingDataFrameA = averageSentimentRatingDataFrame.groupBy("product_id").agg(productIdSentimentMap);
+    val averageSentimentRatingDataFrameA = averageSentimentRatingDataFrame.groupBy("product_id").agg(productIdSentimentMap)
     averageSentimentRatingDataFrameA.cache()
     if (printFlag) {
       averageSentimentRatingDataFrameA.show()
@@ -157,10 +158,11 @@ val original_df = Spark.sql(query)
       val estimated_value = gmm.transform(transformedData)
 
       val model_evaluator = new ClusteringEvaluator().setDistanceMeasure("cosine")
-      val s_width = model_evaluator.evaluate(estimated_value);
-      println("silhouette width " + s_width + " for K " + k);
+      val s_width = model_evaluator.evaluate(estimated_value)
+      println("silhouette width " + s_width + " for K " + k)
 
-      val nextLine = Seq((k, s_width)).toDF("cluster", "s_width");
+      val nextLine = Seq((k, s_width)).toDF("cluster", "s_width")
+
       clusterSilhouette_df = clusterSilhouette_df.union(nextLine)
 
 
@@ -177,14 +179,14 @@ val original_df = Spark.sql(query)
       val reviewerDataFrame = estimated_value.withColumn("normal", checkNormalDistributionConfidenceUdf($"probability"))
 
       if (printFlag) {
-        reviewerDataFrame.show();
+        reviewerDataFrame.show()
       }
 
 
       val reviewerDataFrameB = reviewerDataFrame.columns.foldLeft(reviewerDataFrame)((current, c) => current.withColumn(c, col(c).cast("String")))
       val reviewerDataFrameC = reviewerDataFrameB.select("review_id", "product_id", "customer_id", "prediction", "normal")
 
-      reviewerDataFrameC.coalesce(1).write.mode(SaveMode.Overwrite).csv(output + "_" + k);
+      reviewerDataFrameC.coalesce(1).write.mode(SaveMode.Overwrite).csv(output + "_" + k)
 
       if (printFlag) {
         clusterSilhouette_df.show()
@@ -192,7 +194,7 @@ val original_df = Spark.sql(query)
 
     }
 
-    clusterSilhouette_df.coalesce(1).write.mode(SaveMode.Overwrite).csv(output + "_silhouette_scoreVScluster");
+    clusterSilhouette_df.coalesce(1).write.mode(SaveMode.Overwrite).csv(output + "_silhouette_scoreVScluster")
   }
 
 }
