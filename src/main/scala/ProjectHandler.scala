@@ -87,19 +87,19 @@ val original_df = Spark.sql(query)
 
     // Find average sentiment score  and average rating for each product
 
-    val average_sentiment_rating_score_df = computedDataFrame3.select("product_id", "sentiment", "star_rating")
-    val productIdSentimentMap = average_sentiment_rating_score_df.columns.map((_ -> "mean")).toMap
-    val average_sentiment_rating_score_df1 = average_sentiment_rating_score_df.groupBy("product_id").agg(productIdSentimentMap);
-    average_sentiment_rating_score_df1.cache()
+    val averageSentimentRatingScoreDataFrame = computedDataFrame3.select("product_id", "sentiment", "star_rating")
+    val productIdSentimentMap = averageSentimentRatingScoreDataFrame.columns.map((_ -> "mean")).toMap
+    val averageSentimentRatingScoreDataFrame1 = averageSentimentRatingScoreDataFrame.groupBy("product_id").agg(productIdSentimentMap);
+    averageSentimentRatingScoreDataFrame1.cache()
     if (printFlag) {
-      average_sentiment_rating_score_df1.show()
+      averageSentimentRatingScoreDataFrame1.show()
     }
 
 
-    val average_sentiment_rating_score_df2 = average_sentiment_rating_score_df1.drop("avg(product_id)")
+    val averageSentimentRatingScoreDataFrame2 = averageSentimentRatingScoreDataFrame1.drop("avg(product_id)")
 
 
-    val computedDataFrame5 = computedDataFrame3.join(average_sentiment_rating_score_df2, Seq("product_id"))
+    val computedDataFrame5 = computedDataFrame3.join(averageSentimentRatingScoreDataFrame2, Seq("product_id"))
 
     // Function to compute the distance of each datapoint from its mean.S
     def meanDistance(mu: Double, data: Double): Double = {
