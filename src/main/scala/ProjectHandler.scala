@@ -59,7 +59,7 @@ val original_df = Spark.sql(query)
     val computedDataFrame1 = original_df.withColumn("review_id", uniqueIdGenerator($"product_id", $"customer_id", $"review_date"))
     computedDataFrame1.cache()
 
-    // computing sentiment review
+    // computing sentiment
 
     val reviews_text_df = computedDataFrame1.select("review_id", "review_body")
 
