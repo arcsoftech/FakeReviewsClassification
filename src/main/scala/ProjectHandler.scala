@@ -11,7 +11,7 @@
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StructField, StructType}
 import org.apache.spark.sql.functions._
 import org.apache.spark.ml.feature.VectorAssembler
-import org.apache.spark.ml.linalg.DenseVector
+import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.sql.{Column, ColumnName, DataFrame, Row, SaveMode, SparkSession, types}
 import org.apache.spark.ml.feature.MaxAbsScaler
 import org.apache.spark.ml.clustering.{GaussianMixture, GaussianMixtureModel}
@@ -94,10 +94,6 @@ val dataFrameFromParquet = Spark.read.parquet(inputFilePathForData)
     val productIdSentimentMap = averageSentimentRatingDataFrame.columns.map((_ -> "mean")).toMap
     val averageSentimentRatingDataFrameA = averageSentimentRatingDataFrame.groupBy("product_id").agg(productIdSentimentMap)
     averageSentimentRatingDataFrameA.cache()
-    if (printFlag) {
-      averageSentimentRatingDataFrameA.show()
-    }
-
 
     val averageSentimentRatingDataFrameB = averageSentimentRatingDataFrameA.drop("avg(product_id)")
 
@@ -170,7 +166,7 @@ val dataFrameFromParquet = Spark.read.parquet(inputFilePathForData)
       clusterSilhouetteDataFrame = clusterSilhouetteDataFrame.union(nextLine)
   
 
-      val checkNormalDistributionConfidence: Any => Boolean = _ .asInstanceOf[ DenseVector ].toArray.exists(x =>x >  0.90)
+      val checkNormalDistributionConfidence: Any => Boolean = _ .asInstanceOf[ Vector ].toArray.exists(x =>x >  0.90)
      
       val checkNormalDistributionConfidenceUdf = udf(checkNormalDistributionConfidence)
      
