@@ -46,7 +46,13 @@ object ProjectHandler {
     }
 
 
-    val original_df = sparkSession.read.option("inferSchema", "true").option("header", "true").csv(input)
+val parquetFileDF = sparkSession.read.parquet(input)
+
+// Parquet files can also be used to create a temporary view and then used in SQL statements
+parquetFileDF.createOrReplaceTempView("parquetFile")
+val original_df = sparkSession.sql("SELECT * FROM parquetFile LIMIT 1000")
+
+    // val original_df = sparkSession.read.option("inferSchema", "true").option("header", "true").csv(input)
 
     val uniqueIdGenerator = udf((product_id: String, customer_id: String, review_date: String) => {
       product_id + "_" + customer_id + "_" + review_date
