@@ -20,21 +20,22 @@ import org.apache.spark.ml.clustering.GaussianMixture
 import org.apache.spark.ml.evaluation._
 
 
+
 object ProjectHandler {
   def main(args: Array[String]): Unit = {
     Logger.getRootLogger.setLevel(Level.WARN)
     val sparkConf = new SparkConf().setAppName("FakeReviewsClassification").set("spark.sql.broadcastTimeout", "36000"); //AWS
     val sc = new SparkContext(sparkConf)
-    val sparkSession = SparkSession.builder
+    val Spark = SparkSession.builder
       .config(conf = sparkConf)
       .appName("FakeReviewsClassification")
       .getOrCreate()
-    import sparkSession.implicits._
 
+    import Spark.implicits._
     sc.setLogLevel("ERROR")
 
-    if (args.length < 2) {
-      println("Usage:  Input Output")
+    if (args.length < 4) {
+      println("Usage:  Input Output RowLimit PrintFlag")
       System.exit(1)
     }
 
@@ -46,51 +47,50 @@ object ProjectHandler {
     }
 
 
-val parquetFileDF = sparkSession.read.parquet(input)
+val parquetFileDF = Spark.read.parquet(input)
 
 // Parquet files can also be used to create a temporary view and then used in SQL statements
 parquetFileDF.createOrReplaceTempView("parquetFile")
 var query = "SELECT * FROM parquetFile LIMIT "+ args(2)
-val original_df = sparkSession.sql(query)
+val original_df = Spark.sql(query)
 
-    // val original_df = sparkSession.read.option("inferSchema", "true").option("header", "true").csv(input)
 
     val uniqueIdGenerator = udf((product_id: String, customer_id: String, review_date: String) => {
       product_id + "_" + customer_id + "_" + review_date
     })
 
-    val computed_df1 = original_df.withColumn("review_id", uniqueIdGenerator($"product_id", $"customer_id", $"review_date"))
-    computed_df1.cache()
+    val computedDataFrame1 = original_df.withColumn("review_id", uniqueIdGenerator($"product_id", $"customer_id", $"review_date"))
+    computedDataFrame1.cache()
 
     // computing sentiment review
 
-    val reviews_text_df = computed_df1.select("review_id", "review_body")
+    val reviews_text_df = computedDataFrame1.select("review_id", "review_body")
 
     def sentimentAnalysis: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s) }
 
     val sentimentAnalysisUDF = udf(sentimentAnalysis)
 
     //Dropping text review column after extracting sentiment
-    val computed_df2 = computed_df1.select("review_id", "product_id", "helpful_votes", "star_rating", "customer_id", "review_date", "review_body");
+    val computedDataFrame2 = computedDataFrame1.select("review_id", "product_id", "helpful_votes", "star_rating", "customer_id", "review_date", "review_body");
 
-    computed_df2.cache()
+    computedDataFrame2.cache()
     if (printFlag) {
-      computed_df2.show()
+      computedDataFrame2.show()
     }
 
 
     // Gnerating sentiment column.
 
-    val computed_df3 = computed_df2.withColumn("sentiment", sentimentAnalysisUDF(reviews_text_df("review_body"))).cache.drop("review_body")
-    computed_df3.cache()
+    val computedDataFrame3 = computedDataFrame2.withColumn("sentiment", sentimentAnalysisUDF(reviews_text_df("review_body"))).cache.drop("review_body")
+    computedDataFrame3.cache()
     if (printFlag) {
-      computed_df3.show()
+      computedDataFrame3.show()
     }
 
 
     // Find average sentiment score  and average rating for each product
 
-    val average_sentiment_rating_score_df = computed_df3.select("product_id", "sentiment", "star_rating")
+    val average_sentiment_rating_score_df = computedDataFrame3.select("product_id", "sentiment", "star_rating")
     val productIdSentimentMap = average_sentiment_rating_score_df.columns.map((_ -> "mean")).toMap
     val average_sentiment_rating_score_df1 = average_sentiment_rating_score_df.groupBy("product_id").agg(productIdSentimentMap);
     average_sentiment_rating_score_df1.cache()
@@ -102,17 +102,17 @@ val original_df = sparkSession.sql(query)
     val average_sentiment_rating_score_df2 = average_sentiment_rating_score_df1.drop("avg(product_id)")
 
 
-    val computed_df5 = computed_df3.join(average_sentiment_rating_score_df2, Seq("product_id"))
+    val computedDataFrame5 = computedDataFrame3.join(average_sentiment_rating_score_df2, Seq("product_id"))
 
     // Function to compute the distance of each datapoint from its mean.S
-    def meanDistance(avgValue: Double, specificValue: Double): Double = {
-      math.abs(avgValue - specificValue)
+    def meanDistance(mu: Double, data: Double): Double = {
+      math.abs(mu - data)
     }
 
     def meanDistanceUDF = udf(meanDistance _)
 
-    val computed_df6 = computed_df5.withColumn("sentimentDelta", meanDistanceUDF(computed_df5("avg(sentiment)"), computed_df5("sentiment")))
-    val computed_df7 = computed_df6.withColumn("overallDelta", meanDistanceUDF(computed_df6("avg(star_rating)"), computed_df6("star_rating")))
+    val computedDataFrame6 = computedDataFrame5.withColumn("sentimentDelta", meanDistanceUDF(computedDataFrame5("avg(sentiment)"), computedDataFrame5("sentiment")))
+    val computedDataFrame7 = computedDataFrame6.withColumn("overallDelta", meanDistanceUDF(computedDataFrame6("avg(star_rating)"), computedDataFrame6("star_rating")))
 
 
     // Generate feature vector
@@ -120,7 +120,7 @@ val original_df = sparkSession.sql(query)
       .setInputCols(Array("overallDelta", "sentimentDelta", "helpful_votes"))
       .setOutputCol("features")
 
-    val featuresDF = assembler.transform(computed_df7)
+    val featuresDF = assembler.transform(computedDataFrame7)
     if (printFlag) {
       println("Feature combined using VectorAssembler")
       featuresDF.show()
@@ -132,35 +132,35 @@ val original_df = sparkSession.sql(query)
       .setInputCol("features")
       .setOutputCol("standardizedfeatures")
 
-    val scalerModel = scaler.fit(featuresDF)
+    val scaler_model = scaler.fit(featuresDF)
 
-    val scaledData = scalerModel.transform(featuresDF)
+    val transformedData = scaler_model.transform(featuresDF)
 
     if (printFlag) {
       println(s"Features scaled to range: [${scaler.getMin}, ${scaler.getMax}]")
-      scaledData.show()
+      transformedData.show()
     }
 
 
     // custom csvSchema defined for csv
-    var csvSchema = types.StructType(
-      StructField("cluster", IntegerType, false) ::
+    var Schema = types.StructType(
+      StructField("K", IntegerType, false) ::
         StructField("silhouette_score", DoubleType, false) :: Nil)
 
-    var clusterSilhouette_df = sparkSession.createDataFrame(sc.emptyRDD[Row], csvSchema)
+    var clusterSilhouette_df = Spark.createDataFrame(sc.emptyRDD[Row], Schema)
 
 
     // Compute silhouette_score value against K clusters ranging from 2 to 50
-    for (a <- 2 to 50) {
+    for (k <- 2 to 50) {
 
       val gausian_mixture_model = new GaussianMixture()
-        .setK(a).setFeaturesCol("standardizedfeatures").setMaxIter(100)
+        .setK(k).setFeaturesCol("standardizedfeatures").setMaxIter(100)
 
-      val model = gausian_mixture_model.fit(scaledData)
-      val predictions = model.transform(scaledData)
+      val model = gausian_mixture_model.fit(transformedData)
+      val estimated_value = model.transform(transformedData)
 
-      val evaluator = new ClusteringEvaluator().setDistanceMeasure("cosine")
-      val silhouette_score = evaluator.evaluate(predictions);
+      val model_evaluator = new ClusteringEvaluator().setDistanceMeasure("cosine")
+      val silhouette_score = model_evaluator.evaluate(estimated_value);
       println("silhouette_score value " + silhouette_score + " for K " + a);
 
       val newRow = Seq((a, silhouette_score)).toDF("cluster", "silhouette_score");
@@ -173,9 +173,9 @@ val original_df = sparkSession.sql(query)
       }
 
 
-      val isNormal: Any => Boolean = _.asInstanceOf[DenseVector].toArray.exists(_ > 0.90)
-      val isNormalUdf = udf(isNormal)
-      val reviewer_fake_df = predictions.withColumn("normal", isNormalUdf($"probability"))
+      val checkNormalDistributionConfidence: Any => Boolean = _.asInstanceOf[DenseVector].toArray.exists(_ > 0.90)
+      val checkNormalDistributionConfidenceUdf = udf(checkNormalDistributionConfidence)
+      val reviewer_fake_df = estimated_value.withColumn("normal", checkNormalDistributionConfidenceUdf($"probability"))
 
       if (printFlag) {
         reviewer_fake_df.show();
@@ -185,7 +185,7 @@ val original_df = sparkSession.sql(query)
       val reviewer_fake_df2 = reviewer_fake_df.columns.foldLeft(reviewer_fake_df)((current, c) => current.withColumn(c, col(c).cast("String")))
       val reviewer_fake_df3 = reviewer_fake_df2.select("review_id", "product_id", "customer_id", "prediction", "normal")
 
-      reviewer_fake_df3.coalesce(1).write.mode(SaveMode.Overwrite).csv(output + "_" + a);
+      reviewer_fake_df3.coalesce(1).write.mode(SaveMode.Overwrite).csv(output + "_" + k);
 
       if (printFlag) {
         clusterSilhouette_df.show()
