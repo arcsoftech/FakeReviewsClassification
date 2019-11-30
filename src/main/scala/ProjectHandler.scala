@@ -56,50 +56,50 @@ val original_df = Spark.sql(query)
       product_id + "_" + customer_id + "_" + review_date
     })
 
-    val computedDataFrame1 = original_df.withColumn("review_id", uniqueIdGenerator($"product_id", $"customer_id", $"review_date"))
-    computedDataFrame1.cache()
+    val computedDataFrameA = original_df.withColumn("review_id", uniqueIdGenerator($"product_id", $"customer_id", $"review_date"))
+    computedDataFrameA.cache()
 
     // computing sentiment
 
-    val reviewsSummaryDataFrame = computedDataFrame1.select("review_id", "review_body")
+    val reviewsSummaryDataFrame = computedDataFrameA.select("review_id", "review_body")
 
     def sentimentAnalysis: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s) }
 
     val sentimentAnalysisUDF = udf(sentimentAnalysis)
 
 
-    val computedDataFrame2 = computedDataFrame1.select("review_id", "product_id", "helpful_votes", "star_rating", "customer_id", "review_date", "review_body");
+    val computedDataFrameB = computedDataFrameA.select("review_id", "product_id", "helpful_votes", "star_rating", "customer_id", "review_date", "review_body");
 
-    computedDataFrame2.cache()
+    computedDataFrameB.cache()
     if (printFlag) {
-      computedDataFrame2.show()
+      computedDataFrameB.show()
     }
 
 
     // Gnerating sentiment column.
 
-    val computedDataFrame3 = computedDataFrame2.withColumn("sentiment", sentimentAnalysisUDF(reviewsSummaryDataFrame("review_body"))).cache.drop("review_body")
-    computedDataFrame3.cache()
+    val computedDataFrameC = computedDataFrameB.withColumn("sentiment", sentimentAnalysisUDF(reviewsSummaryDataFrame("review_body"))).cache.drop("review_body")
+    computedDataFrameC.cache()
     if (printFlag) {
-      computedDataFrame3.show()
+      computedDataFrameC.show()
     }
 
 
     // Find average sentiment score  and average rating for each product
 
-    val averageSentimentRatingScoreDataFrame = computedDataFrame3.select("product_id", "sentiment", "star_rating")
+    val averageSentimentRatingScoreDataFrame = computedDataFrameC.select("product_id", "sentiment", "star_rating")
     val productIdSentimentMap = averageSentimentRatingScoreDataFrame.columns.map((_ -> "mean")).toMap
-    val averageSentimentRatingScoreDataFrame1 = averageSentimentRatingScoreDataFrame.groupBy("product_id").agg(productIdSentimentMap);
-    averageSentimentRatingScoreDataFrame1.cache()
+    val averageSentimentRatingScoreDataFrameA = averageSentimentRatingScoreDataFrame.groupBy("product_id").agg(productIdSentimentMap);
+    averageSentimentRatingScoreDataFrameA.cache()
     if (printFlag) {
-      averageSentimentRatingScoreDataFrame1.show()
+      averageSentimentRatingScoreDataFrameA.show()
     }
 
 
-    val averageSentimentRatingScoreDataFrame2 = averageSentimentRatingScoreDataFrame1.drop("avg(product_id)")
+    val averageSentimentRatingScoreDataFrameB = averageSentimentRatingScoreDataFrameA.drop("avg(product_id)")
 
 
-    val computedDataFrame5 = computedDataFrame3.join(averageSentimentRatingScoreDataFrame2, Seq("product_id"))
+    val computedDataFrameE = computedDataFrameC.join(averageSentimentRatingScoreDataFrameB, Seq("product_id"))
 
     // Function to compute the distance of each datapoint from its mean.S
     def meanDistance(mu: Double, data: Double): Double = {
@@ -108,8 +108,8 @@ val original_df = Spark.sql(query)
 
     def meanDistanceUDF = udf(meanDistance _)
 
-    val computedDataFrame6 = computedDataFrame5.withColumn("sentimentDelta", meanDistanceUDF(computedDataFrame5("avg(sentiment)"), computedDataFrame5("sentiment")))
-    val computedDataFrame7 = computedDataFrame6.withColumn("overallDelta", meanDistanceUDF(computedDataFrame6("avg(star_rating)"), computedDataFrame6("star_rating")))
+    val computedDataFrameF = computedDataFrameE.withColumn("sentimentDelta", meanDistanceUDF(computedDataFrameE("avg(sentiment)"), computedDataFrameE("sentiment")))
+    val computedDataFrameG = computedDataFrameF.withColumn("overallDelta", meanDistanceUDF(computedDataFrameF("avg(star_rating)"), computedDataFrameF("star_rating")))
 
 
     // Generate feature vector
@@ -117,7 +117,7 @@ val original_df = Spark.sql(query)
       .setInputCols(Array("overallDelta", "sentimentDelta", "helpful_votes"))
       .setOutputCol("features")
 
-    val featuresDF = feature_assembler.transform(computedDataFrame7)
+    val featuresDF = feature_assembler.transform(computedDataFrameG)
     if (printFlag) {
       println("Feature combined using VectorAssembler")
       featuresDF.show()
@@ -179,10 +179,10 @@ val original_df = Spark.sql(query)
       }
 
 
-      val reviewerDataFrame2 = reviewerDataFrame.columns.foldLeft(reviewerDataFrame)((current, c) => current.withColumn(c, col(c).cast("String")))
-      val reviewerDataFrame3 = reviewerDataFrame2.select("review_id", "product_id", "customer_id", "prediction", "normal")
+      val reviewerDataFrameB = reviewerDataFrame.columns.foldLeft(reviewerDataFrame)((current, c) => current.withColumn(c, col(c).cast("String")))
+      val reviewerDataFrameC = reviewerDataFrameB.select("review_id", "product_id", "customer_id", "prediction", "normal")
 
-      reviewerDataFrame3.coalesce(1).write.mode(SaveMode.Overwrite).csv(output + "_" + k);
+      reviewerDataFrameC.coalesce(1).write.mode(SaveMode.Overwrite).csv(output + "_" + k);
 
       if (printFlag) {
         clusterSilhouette_df.show()
