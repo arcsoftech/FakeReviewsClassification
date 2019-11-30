@@ -8,6 +8,7 @@
 // Shobhit
 
 import SentimentAnalyzer.extractSentiment
+import org.apache.log4j.{Level, Logger}
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StructField, StructType}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{Column, ColumnName, Row, SaveMode, SparkSession, types}
@@ -21,7 +22,7 @@ import org.apache.spark.ml.evaluation._
 
 object ProjectHandler {
   def main(args: Array[String]): Unit = {
-
+    Logger.getRootLogger.setLevel(Level.WARN)
     val sparkConf = new SparkConf().setAppName("FakeReviewsClassification").set("spark.sql.broadcastTimeout", "36000"); //AWS
     val sc = new SparkContext(sparkConf)
     val sparkSession = SparkSession.builder
@@ -40,11 +41,10 @@ object ProjectHandler {
     val input = args(0)
     val output = args(1)
     var printFlag = true
-    if(args(2) == 0)
-    {
+    if (args(2) == 0) {
       printFlag = false
     }
-    
+
 
     val original_df = sparkSession.read.option("inferSchema", "true").option("header", "true").csv(input)
 
@@ -96,7 +96,7 @@ object ProjectHandler {
 
 
     val computed_df5 = computed_df3.join(average_sentiment_rating_score_df2, Seq("product_id"))
-    
+
     // Function to compute the distance of each datapoint from its mean.S
     def meanDistance(avgValue: Double, specificValue: Double): Double = {
       math.abs(avgValue - specificValue)
@@ -106,7 +106,7 @@ object ProjectHandler {
 
     val computed_df6 = computed_df5.withColumn("sentimentDelta", meanDistanceUDF(computed_df5("avg(sentiment)"), computed_df5("sentiment")))
     val computed_df7 = computed_df6.withColumn("overallDelta", meanDistanceUDF(computed_df6("avg(star_rating)"), computed_df6("star_rating")))
-    
+
 
     // Generate feature vector
     val assembler = new VectorAssembler()
