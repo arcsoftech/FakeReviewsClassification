@@ -48,10 +48,9 @@ object ProjectHandler {
     }
 
 
-val parquetFileDF = Spark.read.parquet(inputFilePathForData)
+val dataFrameFromParquet = Spark.read.parquet(inputFilePathForData)
 
-// Parquet files can also be used to create a temporary view and then used in SQL statements
-parquetFileDF.createOrReplaceTempView("parquetFile")
+    dataFrameFromParquet.createOrReplaceTempView("parquetFile")
 var query = "SELECT * FROM parquetFile LIMIT "+ args(2)
 val original_df = Spark.sql(query)
 
@@ -67,7 +66,7 @@ val original_df = Spark.sql(query)
 
     val reviewsSummaryDataFrame = computedDataFrameA.select("review_id", "review_body")
 
-    def sentimentAnalysis: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s) }
+    def sentimentAnalysis: (String => Int) = { input => SentimentAnalyzer.mainSentiment(input) }
 
     val sentimentAnalysisUDF = udf(sentimentAnalysis)
 
@@ -118,13 +117,13 @@ val original_df = Spark.sql(query)
 
     // Generate feature vector
     val feature_assembler = new VectorAssembler()
-      .setInputCols(Array("overallDelta", "sentimentDelta", "helpful_votes"))
+      .setInputCols( Array ("overallDelta", "sentimentDelta", "helpful_votes"))
       .setOutputCol("features")
 
-    val featuresDF = feature_assembler.transform(computedDataFrameG)
+    val attributesDataFrame = feature_assembler.transform(computedDataFrameG)
     if (printFlag) {
       println("Feature combined using VectorAssembler")
-      featuresDF.show()
+      attributesDataFrame.show()
     }
 
 
@@ -133,13 +132,13 @@ val original_df = Spark.sql(query)
       .setInputCol("features")
       .setOutputCol("standardizedfeatures")
 
-    val minMaxStandardizer_model = minMaxStandardizer.fit(featuresDF)
+    val minMaxStandardizer_model = minMaxStandardizer. fit(attributesDataFrame)
 
-    val transformedData = minMaxStandardizer_model.transform(featuresDF)
+    val transformedData = minMaxStandardizer_model. transform(attributesDataFrame)
 
     if (printFlag) {
       println(s"Features scaled to range: [${minMaxStandardizer.getMin}, ${minMaxStandardizer.getMax}]")
-      transformedData.show()
+      transformedData. show()
     }
 
 
@@ -158,8 +157,8 @@ val original_df = Spark.sql(query)
       val gmm = gausian_mixture_model.fit(transformedData)
       val estimated_value = gmm.transform(transformedData)
 
-      val model_evaluator = new ClusteringEvaluator().setDistanceMeasure("cosine")
-      val s_width = model_evaluator.evaluate(estimated_value)
+      val model_cosine = new ClusteringEvaluator().setDistanceMeasure("cosine")
+      val s_width = model_cosine.evaluate(estimated_value)
       println("silhouette width " + s_width + " for K " + k)
 
       val nextLine = Seq((k, s_width)).toDF("cluster", "s_width")
@@ -173,7 +172,7 @@ val original_df = Spark.sql(query)
       }
 
 
-      val checkNormalDistributionConfidence: Any => Boolean = _.asInstanceOf[DenseVector].toArray.exists(_ > 0.90)
+      val checkNormalDistributionConfidence: Any => Boolean = _ .asInstanceOf[ DenseVector ].toArray.exists(_ >  0.90)
      
       val checkNormalDistributionConfidenceUdf = udf(checkNormalDistributionConfidence)
      
