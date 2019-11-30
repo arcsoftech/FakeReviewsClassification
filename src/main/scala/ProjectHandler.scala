@@ -173,7 +173,7 @@ val original_df = sparkSession.sql(query)
       }
 
 
-      val isNormal: Any => Boolean = _.asInstanceOf[DenseVector].toArray.exists(_ > 0.999)
+      val isNormal: Any => Boolean = _.asInstanceOf[DenseVector].toArray.exists(_ > 0.90)
       val isNormalUdf = udf(isNormal)
       val reviewer_fake_df = predictions.withColumn("normal", isNormalUdf($"probability"))
 
