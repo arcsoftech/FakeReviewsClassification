@@ -171,7 +171,9 @@ val original_df = Spark.sql(query)
 
 
       val checkNormalDistributionConfidence: Any => Boolean = _.asInstanceOf[DenseVector].toArray.exists(_ > 0.90)
+     
       val checkNormalDistributionConfidenceUdf = udf(checkNormalDistributionConfidence)
+     
       val reviewerDataFrame = estimated_value.withColumn("normal", checkNormalDistributionConfidenceUdf($"probability"))
 
       if (printFlag) {
