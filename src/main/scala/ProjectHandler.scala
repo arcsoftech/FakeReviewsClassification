@@ -48,7 +48,7 @@ object ProjectHandler {
     }
 
 
-val dataFrameFromParquet = Spark.read.parquet(inputFilePathForData)
+    val dataFrameFromParquet = Spark.read.parquet(inputFilePathForData)
 
     dataFrameFromParquet.createOrReplaceTempView("parquetFile")
     var query = "SELECT * FROM parquetFile LIMIT "+ args(2)
@@ -144,32 +144,32 @@ val dataFrameFromParquet = Spark.read.parquet(inputFilePathForData)
     }
 
     def writeCSV(dataframe:DataFrame,path:String)={
-       dataframe.coalesce(1).write.csv(path)
+      dataframe.coalesce(1).write.csv(path)
     }
     // Compute silhouette width value against K clusters ranging from 2 to 51
     for (k <- 2 to 51) {
-     
-     var  gmm =  getModel(k,transformedData) 
+
+      var  gmm =  getModel(k,transformedData)
       val estimated_value = gmm.transform(transformedData)
 
       val model_cosine = new ClusteringEvaluator() .
-                                                  setDistanceMeasure ("cosine")
+        setDistanceMeasure ("cosine")
       val s_width = model_cosine.evaluate(estimated_value)
-      
+
       if (printFlag) {
         println("silhouette width " + s_width + " for K " + k)
       }
-     
+
 
       val nextLine = Seq((k, s_width)).toDF("cluster", "s_width")
 
       clusterSilhouetteDataFrame = clusterSilhouetteDataFrame.union(nextLine)
-  
+
 
       val checkNormalDistributionConfidence: Any => Boolean = _ .asInstanceOf[ Vector ].toArray.exists(x =>x >  0.90)
-     
+
       val checkNormalDistributionConfidenceUdf = udf(checkNormalDistributionConfidence)
-     
+
       val reviewerDataFrame = estimated_value.withColumn("isNormal", checkNormalDistributionConfidenceUdf($"probability"))
 
 
@@ -184,7 +184,7 @@ val dataFrameFromParquet = Spark.read.parquet(inputFilePathForData)
       }
 
     }
-     writeCSV(clusterSilhouetteDataFrame,outputFilePathForCSV + "_silhouette_scoreVScluster")
+    writeCSV(clusterSilhouetteDataFrame,outputFilePathForCSV + "_silhouette_scoreVScluster")
   }
 
 }
