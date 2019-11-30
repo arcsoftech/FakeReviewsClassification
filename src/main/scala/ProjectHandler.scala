@@ -10,7 +10,7 @@
 
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StructField, StructType}
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{Column, ColumnName, Row, SaveMode, SparkSession, types}
+import org.apache.spark.sql.{ Row, Column, ColumnName,SaveMode, SparkSession, types}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.ml.linalg.DenseVector
