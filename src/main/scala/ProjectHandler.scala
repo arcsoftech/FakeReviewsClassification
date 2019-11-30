@@ -150,7 +150,7 @@ val original_df = Spark.sql(query)
     var clusterSilhouette_df = Spark.createDataFrame(sc.emptyRDD[Row], Schema)
 
 
-    // Compute silhouette_width value against K clusters ranging from 2 to 50
+    // Compute silhouette width value against K clusters ranging from 2 to 50
     for (k <- 2 to 50) {
 
       val gausian_mixture_model = new GaussianMixture()
