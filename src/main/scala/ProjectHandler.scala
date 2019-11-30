@@ -10,18 +10,20 @@
 
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StructField, StructType}
 import org.apache.spark.sql.functions._
-import org.apache.spark.sql.{ Row, Column, ColumnName,SaveMode, SparkSession, types}
-import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.ml.linalg.DenseVector
+import org.apache.spark.sql.{ Row, Column, ColumnName,SaveMode, SparkSession, types}
 import org.apache.spark.ml.feature.MinMaxScaler
 import org.apache.spark.ml.clustering.GaussianMixture
+import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.ml.evaluation._
 
 
 
 object ProjectHandler {
-  def main(args: Array[String]) : Unit = {
+  //This is the main function that runs on execution
+
+  def main(args: Array[ String ] )  : Unit =  {
     //We are adding more timeout to battle some data frame operations on the server
     val sparkConf = new SparkConf().setAppName("FakeReviewsClassification").set("spark.sql.broadcastTimeout", "36000")
     val sc = new SparkContext(sparkConf)
@@ -30,22 +32,23 @@ object ProjectHandler {
       .appName("FakeReviewsClassification")
       .getOrCreate()
 
-    import Spark.implicits._
+    import  Spark.implicits._
 
     if (args.length < 4) {
       println("Usage:  Input Output RowLimit PrintFlag")
-      System.exit(1)
+      System.exit( 1 )
     }
 
-    val input = args(0)
-    val output = args(1)
+    val inputFilePathForData = args(0)
+    val outputFilePathForCSV = args(1)
+
     var printFlag = true
     if (args(3) == 0) {
       printFlag = false
     }
 
 
-val parquetFileDF = Spark.read.parquet(input)
+val parquetFileDF = Spark.read.parquet(inputFilePathForData)
 
 // Parquet files can also be used to create a temporary view and then used in SQL statements
 parquetFileDF.createOrReplaceTempView("parquetFile")
@@ -141,11 +144,9 @@ val original_df = Spark.sql(query)
 
 
     // custom csvSchema defined for csv
-    var Schema = types.StructType(
-      StructField("K", IntegerType, false) ::
-        StructField("s_width", DoubleType, false) :: Nil)
+    var outlineType = types.StructType( StructField("K", IntegerType , false ) :: StructField(" s_width", DoubleType , false ) :: Nil)
 
-    var clusterSilhouette_df = Spark.createDataFrame(sc.emptyRDD[Row], Schema)
+    var clusterSilhouette_df = Spark.createDataFrame(sc.emptyRDD[Row], outlineType)
 
 
     // Compute silhouette width value against K clusters ranging from 2 to 51
@@ -178,15 +179,11 @@ val original_df = Spark.sql(query)
      
       val reviewerDataFrame = estimated_value.withColumn("normal", checkNormalDistributionConfidenceUdf($"probability"))
 
-      if (printFlag) {
-        reviewerDataFrame.show()
-      }
 
-
-      val reviewerDataFrameB = reviewerDataFrame.columns.foldLeft(reviewerDataFrame)((current, c) => current.withColumn(c, col(c).cast("String")))
+      val reviewerDataFrameB = reviewerDataFrame.columns.foldLeft(reviewerDataFrame)((present, p) => present.withColumn(p, col(p).cast("String")))
       val reviewerDataFrameC = reviewerDataFrameB.select("review_id", "product_id", "customer_id", "prediction", "normal")
 
-      reviewerDataFrameC.coalesce(1).write.mode(SaveMode.Overwrite).csv(output + "_" + k)
+      reviewerDataFrameC.coalesce(1).write.mode(SaveMode.Overwrite).csv(outputFilePathForCSV + "_" + k)
 
       if (printFlag) {
         clusterSilhouette_df.show()
@@ -194,7 +191,7 @@ val original_df = Spark.sql(query)
 
     }
 
-    clusterSilhouette_df.coalesce(1).write.mode(SaveMode.Overwrite).csv(output + "_silhouette_scoreVScluster")
+    clusterSilhouette_df.coalesce(1).write.mode(SaveMode.Overwrite).csv(outputFilePathForCSV + "_silhouette_scoreVScluster")
   }
 
 }
