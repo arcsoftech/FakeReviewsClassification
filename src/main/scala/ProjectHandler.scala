@@ -12,9 +12,9 @@ import org.apache.spark.sql.types.{DoubleType, IntegerType, StructField, StructT
 import org.apache.spark.sql.functions._
 import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.ml.linalg.DenseVector
-import org.apache.spark.sql.{ Row, Column, ColumnName,SaveMode, SparkSession, types}
-import org.apache.spark.ml.feature.MinMaxScaler
-import org.apache.spark.ml.clustering.GaussianMixture
+import org.apache.spark.sql.{Column, ColumnName, DataFrame, Row, SaveMode, SparkSession, types}
+import org.apache.spark.ml.feature.MaxAbsScaler
+import org.apache.spark.ml.clustering.{GaussianMixture, GaussianMixtureModel}
 import org.apache.spark.{SparkConf, SparkContext}
 import org.apache.spark.ml.evaluation._
 
@@ -51,15 +51,15 @@ object ProjectHandler {
 val dataFrameFromParquet = Spark.read.parquet(inputFilePathForData)
 
     dataFrameFromParquet.createOrReplaceTempView("parquetFile")
-var query = "SELECT * FROM parquetFile LIMIT "+ args(2)
-val original_df = Spark.sql(query)
+    var query = "SELECT * FROM parquetFile LIMIT "+ args(2)
+    val originalDataFrame = Spark.sql(query)
 
 
     val uniqueIdGenerator = udf((product_id: String, customer_id: String, review_date: String) => {
       product_id + "_" + customer_id + "_" + review_date
     })
 
-    val computedDataFrameA = original_df.withColumn("review_id", uniqueIdGenerator($"product_id", $"customer_id", $"review_date"))
+    val computedDataFrameA = originalDataFrame.withColumn("review_id", uniqueIdGenerator($"product_id", $"customer_id", $"review_date"))
     computedDataFrameA.cache()
 
     // computing sentiment
@@ -116,81 +116,79 @@ val original_df = Spark.sql(query)
 
 
     // Generate feature vector
-    val feature_assembler = new VectorAssembler()
+    val model_features = new VectorAssembler()
       .setInputCols( Array ("overallDelta", "sentimentDelta", "helpful_votes"))
       .setOutputCol("features")
 
-    val attributesDataFrame = feature_assembler.transform(computedDataFrameG)
-    if (printFlag) {
-      println("Feature combined using VectorAssembler")
-      attributesDataFrame.show()
-    }
+    val attributesDataFrame = model_features.transform (computedDataFrameG)
 
 
     // Min Max Standardization
-    val minMaxStandardizer = new MinMaxScaler()
+    val Standardizer = new MaxAbsScaler()
       .setInputCol("features")
       .setOutputCol("standardizedfeatures")
 
-    val minMaxStandardizer_model = minMaxStandardizer. fit(attributesDataFrame)
+    val Standardizer_model = Standardizer. fit(attributesDataFrame)
 
-    val transformedData = minMaxStandardizer_model. transform(attributesDataFrame)
+    var transformedData = Standardizer_model. transform(attributesDataFrame)
 
-    if (printFlag) {
-      println(s"Features scaled to range: [${minMaxStandardizer.getMin}, ${minMaxStandardizer.getMax}]")
-      transformedData. show()
-    }
 
 
     // custom csvSchema defined for csv
     var outlineType = types.StructType( StructField("K", IntegerType , false ) :: StructField(" s_width", DoubleType , false ) :: Nil)
 
-    var clusterSilhouette_df = Spark.createDataFrame(sc.emptyRDD[Row], outlineType)
+    var clusterSilhouetteDataFrame = Spark.createDataFrame (sc.emptyRDD[Row], outlineType )
 
-
-    // Compute silhouette width value against K clusters ranging from 2 to 51
-    for (k <- 2 to 51) {
-
+    def getModel(k:Int,transformedData:DataFrame):GaussianMixtureModel={
       val gausian_mixture_model = new GaussianMixture()
         .setK(k).setFeaturesCol("standardizedfeatures").setMaxIter(100)
 
       val gmm = gausian_mixture_model.fit(transformedData)
+      return gmm
+    }
+
+    def writeCSV(dataframe:DataFrame,path:String)={
+       dataframe.coalesce(1).write.csv(path)
+    }
+    // Compute silhouette width value against K clusters ranging from 2 to 51
+    for (k <- 2 to 51) {
+     
+     var  gmm =  getModel(k,transformedData) 
       val estimated_value = gmm.transform(transformedData)
 
-      val model_cosine = new ClusteringEvaluator().setDistanceMeasure("cosine")
+      val model_cosine = new ClusteringEvaluator() .
+                                                  setDistanceMeasure ("cosine")
       val s_width = model_cosine.evaluate(estimated_value)
-      println("silhouette width " + s_width + " for K " + k)
+      
+      if (printFlag) {
+        println("silhouette width " + s_width + " for K " + k)
+      }
+     
 
       val nextLine = Seq((k, s_width)).toDF("cluster", "s_width")
 
-      clusterSilhouette_df = clusterSilhouette_df.union(nextLine)
-
-
-      for (i <- 0 until gmm.getK) {
-        println(s"Gaussian $i:\nweight=${gmm.weights(i)}\n" +
-          s"mu=${gmm.gaussians(i).mean}\nsigma=\n${gmm.gaussians(i).cov}\n")
-      }
-
+      clusterSilhouetteDataFrame = clusterSilhouetteDataFrame.union(nextLine)
+  
 
       val checkNormalDistributionConfidence: Any => Boolean = _ .asInstanceOf[ DenseVector ].toArray.exists(_ >  0.90)
      
       val checkNormalDistributionConfidenceUdf = udf(checkNormalDistributionConfidence)
      
-      val reviewerDataFrame = estimated_value.withColumn("normal", checkNormalDistributionConfidenceUdf($"probability"))
+      val reviewerDataFrame = estimated_value.withColumn("isNormal", checkNormalDistributionConfidenceUdf($"probability"))
 
 
       val reviewerDataFrameB = reviewerDataFrame.columns.foldLeft(reviewerDataFrame)((present, p) => present.withColumn(p, col(p).cast("String")))
-      val reviewerDataFrameC = reviewerDataFrameB.select("review_id", "product_id", "customer_id", "prediction", "normal")
+      val reviewerDataFrameC = reviewerDataFrameB.select("review_id", "product_id", "customer_id", "prediction", "isNormal")
 
-      reviewerDataFrameC.coalesce(1).write.mode(SaveMode.Overwrite).csv(outputFilePathForCSV + "_" + k)
+
+      writeCSV(reviewerDataFrameC,outputFilePathForCSV + "_" + k)
 
       if (printFlag) {
-        clusterSilhouette_df.show()
+        clusterSilhouetteDataFrame.show()
       }
 
     }
-
-    clusterSilhouette_df.coalesce(1).write.mode(SaveMode.Overwrite).csv(outputFilePathForCSV + "_silhouette_scoreVScluster")
+     writeCSV(clusterSilhouetteDataFrame,outputFilePathForCSV + "_silhouette_scoreVScluster")
   }
 
 }
