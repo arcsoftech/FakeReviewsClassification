@@ -21,7 +21,7 @@ import org.apache.spark.ml.evaluation._
 
 
 object ProjectHandler {
-  def main(args: Array[String]): Unit = {
+  def main(args: Array[String]) : Unit = {
     val sparkConf = new SparkConf().setAppName("FakeReviewsClassification").set("spark.sql.broadcastTimeout", "36000"); //AWS
     val sc = new SparkContext(sparkConf)
     val Spark = SparkSession.builder
