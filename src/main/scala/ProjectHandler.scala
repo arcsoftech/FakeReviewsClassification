@@ -170,7 +170,7 @@ val dataFrameFromParquet = Spark.read.parquet(inputFilePathForData)
       clusterSilhouetteDataFrame = clusterSilhouetteDataFrame.union(nextLine)
   
 
-      val checkNormalDistributionConfidence: Any => Boolean = _ .asInstanceOf[ DenseVector ].toArray.exists(_ >  0.90)
+      val checkNormalDistributionConfidence: Any => Boolean = _ .asInstanceOf[ DenseVector ].toArray.exists(x =>x >  0.90)
      
       val checkNormalDistributionConfidenceUdf = udf(checkNormalDistributionConfidence)
      
