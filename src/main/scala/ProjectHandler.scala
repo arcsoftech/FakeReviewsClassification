@@ -161,9 +161,9 @@ val original_df = Spark.sql(query)
 
       val model_evaluator = new ClusteringEvaluator().setDistanceMeasure("cosine")
       val silhouette_score = model_evaluator.evaluate(estimated_value);
-      println("silhouette_score value " + silhouette_score + " for K " + a);
+      println("silhouette_score value " + silhouette_score + " for K " + k);
 
-      val newRow = Seq((a, silhouette_score)).toDF("cluster", "silhouette_score");
+      val newRow = Seq((k, silhouette_score)).toDF("cluster", "silhouette_score");
       clusterSilhouette_df = clusterSilhouette_df.union(newRow)
 
 
