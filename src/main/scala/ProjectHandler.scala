@@ -7,8 +7,7 @@
 // Pawan
 // Shobhit
 
-import SentimentAnalyzer.extractSentiment
-import org.apache.log4j.{Level, Logger}
+
 import org.apache.spark.sql.types.{DoubleType, IntegerType, StructField, StructType}
 import org.apache.spark.sql.functions._
 import org.apache.spark.sql.{Column, ColumnName, Row, SaveMode, SparkSession, types}
@@ -23,7 +22,6 @@ import org.apache.spark.ml.evaluation._
 
 object ProjectHandler {
   def main(args: Array[String]): Unit = {
-    Logger.getRootLogger.setLevel(Level.WARN)
     val sparkConf = new SparkConf().setAppName("FakeReviewsClassification").set("spark.sql.broadcastTimeout", "36000"); //AWS
     val sc = new SparkContext(sparkConf)
     val Spark = SparkSession.builder
@@ -32,7 +30,6 @@ object ProjectHandler {
       .getOrCreate()
 
     import Spark.implicits._
-    sc.setLogLevel("ERROR")
 
     if (args.length < 4) {
       println("Usage:  Input Output RowLimit PrintFlag")
@@ -116,11 +113,11 @@ val original_df = Spark.sql(query)
 
 
     // Generate feature vector
-    val assembler = new VectorAssembler()
+    val feature_assembler = new VectorAssembler()
       .setInputCols(Array("overallDelta", "sentimentDelta", "helpful_votes"))
       .setOutputCol("features")
 
-    val featuresDF = assembler.transform(computedDataFrame7)
+    val featuresDF = feature_assembler.transform(computedDataFrame7)
     if (printFlag) {
       println("Feature combined using VectorAssembler")
       featuresDF.show()
