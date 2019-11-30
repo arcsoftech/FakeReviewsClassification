@@ -147,14 +147,14 @@ val original_df = Spark.sql(query)
     var clusterSilhouette_df = Spark.createDataFrame(sc.emptyRDD[Row], Schema)
 
 
-    // Compute silhouette width value against K clusters ranging from 2 to 50
-    for (k <- 2 to 50) {
+    // Compute silhouette width value against K clusters ranging from 2 to 51
+    for (k <- 2 to 51) {
 
       val gausian_mixture_model = new GaussianMixture()
         .setK(k).setFeaturesCol("standardizedfeatures").setMaxIter(100)
 
-      val model = gausian_mixture_model.fit(transformedData)
-      val estimated_value = model.transform(transformedData)
+      val gmm = gausian_mixture_model.fit(transformedData)
+      val estimated_value = gmm.transform(transformedData)
 
       val model_evaluator = new ClusteringEvaluator().setDistanceMeasure("cosine")
       val s_width = model_evaluator.evaluate(estimated_value);
