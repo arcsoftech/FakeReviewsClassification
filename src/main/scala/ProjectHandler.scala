@@ -61,13 +61,13 @@ val original_df = Spark.sql(query)
 
     // computing sentiment
 
-    val reviews_text_df = computedDataFrame1.select("review_id", "review_body")
+    val reviewsSummaryDataFrame = computedDataFrame1.select("review_id", "review_body")
 
     def sentimentAnalysis: (String => Int) = { s => SentimentAnalyzer.mainSentiment(s) }
 
     val sentimentAnalysisUDF = udf(sentimentAnalysis)
 
-    //Dropping text review column after extracting sentiment
+
     val computedDataFrame2 = computedDataFrame1.select("review_id", "product_id", "helpful_votes", "star_rating", "customer_id", "review_date", "review_body");
 
     computedDataFrame2.cache()
@@ -78,7 +78,7 @@ val original_df = Spark.sql(query)
 
     // Gnerating sentiment column.
 
-    val computedDataFrame3 = computedDataFrame2.withColumn("sentiment", sentimentAnalysisUDF(reviews_text_df("review_body"))).cache.drop("review_body")
+    val computedDataFrame3 = computedDataFrame2.withColumn("sentiment", sentimentAnalysisUDF(reviewsSummaryDataFrame("review_body"))).cache.drop("review_body")
     computedDataFrame3.cache()
     if (printFlag) {
       computedDataFrame3.show()
