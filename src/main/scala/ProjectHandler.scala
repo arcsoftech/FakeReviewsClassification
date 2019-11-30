@@ -8,14 +8,14 @@
 // Shobhit
 
 
-import org.apache.spark.sql.types.{DoubleType, IntegerType, StructField, StructType}
+import org.apache.spark.sql.types.{StructField, IntegerType, DoubleType, StructType}
 import org.apache.spark.sql.functions._
 import org.apache.spark.ml.feature.VectorAssembler
 import org.apache.spark.ml.linalg.Vector
 import org.apache.spark.sql.{Column, ColumnName, DataFrame, Row, SaveMode, SparkSession, types}
 import org.apache.spark.ml.feature.MaxAbsScaler
 import org.apache.spark.ml.clustering.{GaussianMixture, GaussianMixtureModel}
-import org.apache.spark.{SparkConf, SparkContext}
+import org.apache.spark.{SparkContext, SparkConf}
 import org.apache.spark.ml.evaluation._
 
 
@@ -26,11 +26,8 @@ object ProjectHandler {
   def main(args: Array[ String ] )  : Unit =  {
     //We are adding more timeout to battle some data frame operations on the server
     val sparkConf = new SparkConf().setAppName("FakeReviewsClassification").set("spark.sql.broadcastTimeout", "36000")
-    val sc = new SparkContext(sparkConf)
-    val Spark = SparkSession.builder
-      .config(conf = sparkConf)
-      .appName("FakeReviewsClassification")
-      .getOrCreate()
+    val sparkContext = new SparkContext( sparkConf )
+    val Spark = SparkSession.builder.config( conf = sparkConf ).appName("FakeReviewsClassification").getOrCreate()
 
     import  Spark.implicits._
 
@@ -113,16 +110,13 @@ object ProjectHandler {
 
     // Generate feature vector
     val model_features = new VectorAssembler()
-      .setInputCols( Array ("overallDelta", "sentimentDelta", "helpful_votes"))
-      .setOutputCol("features")
+      .setInputCols( Array ("overallDelta", "sentimentDelta", "helpful_votes")).setOutputCol("features")
 
     val attributesDataFrame = model_features.transform (computedDataFrameG)
 
 
     // Min Max Standardization
-    val Standardizer = new MaxAbsScaler()
-      .setInputCol("features")
-      .setOutputCol("standardizedfeatures")
+    val Standardizer = new MaxAbsScaler().setInputCol("features").setOutputCol("standardizedfeatures")
 
     val Standardizer_model = Standardizer. fit(attributesDataFrame)
 
@@ -133,7 +127,7 @@ object ProjectHandler {
     // custom csvSchema defined for csv
     var outlineType = types.StructType( StructField("K", IntegerType , false ) :: StructField(" s_width", DoubleType , false ) :: Nil)
 
-    var clusterSilhouetteDataFrame = Spark.createDataFrame (sc.emptyRDD[Row], outlineType )
+    var clusterSilhouetteDataFrame = Spark.createDataFrame (sparkContext.emptyRDD[Row], outlineType )
 
     def getModel(k:Int,transformedData:DataFrame):GaussianMixtureModel={
       val gausian_mixture_model = new GaussianMixture()
