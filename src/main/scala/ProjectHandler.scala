@@ -41,7 +41,7 @@ object ProjectHandler {
     val input = args(0)
     val output = args(1)
     var printFlag = true
-    if (args(2) == 0) {
+    if (args(3) == 0) {
       printFlag = false
     }
 
@@ -50,7 +50,8 @@ val parquetFileDF = sparkSession.read.parquet(input)
 
 // Parquet files can also be used to create a temporary view and then used in SQL statements
 parquetFileDF.createOrReplaceTempView("parquetFile")
-val original_df = sparkSession.sql("SELECT * FROM parquetFile LIMIT 1000")
+var query = "SELECT * FROM parquetFile LIMIT "+ sys.args(2) 
+val original_df = sparkSession.sql(query)
 
     // val original_df = sparkSession.read.option("inferSchema", "true").option("header", "true").csv(input)
 
