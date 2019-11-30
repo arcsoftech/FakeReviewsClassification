@@ -128,16 +128,16 @@ val original_df = Spark.sql(query)
 
 
     // Min Max Standardization
-    val scaler = new MinMaxScaler()
+    val minMaxStandardizer = new MinMaxScaler()
       .setInputCol("features")
       .setOutputCol("standardizedfeatures")
 
-    val scaler_model = scaler.fit(featuresDF)
+    val minMaxStandardizer_model = minMaxStandardizer.fit(featuresDF)
 
-    val transformedData = scaler_model.transform(featuresDF)
+    val transformedData = minMaxStandardizer_model.transform(featuresDF)
 
     if (printFlag) {
-      println(s"Features scaled to range: [${scaler.getMin}, ${scaler.getMax}]")
+      println(s"Features scaled to range: [${minMaxStandardizer.getMin}, ${minMaxStandardizer.getMax}]")
       transformedData.show()
     }
 
@@ -145,12 +145,12 @@ val original_df = Spark.sql(query)
     // custom csvSchema defined for csv
     var Schema = types.StructType(
       StructField("K", IntegerType, false) ::
-        StructField("silhouette_score", DoubleType, false) :: Nil)
+        StructField("s_width", DoubleType, false) :: Nil)
 
     var clusterSilhouette_df = Spark.createDataFrame(sc.emptyRDD[Row], Schema)
 
 
-    // Compute silhouette_score value against K clusters ranging from 2 to 50
+    // Compute silhouette_width value against K clusters ranging from 2 to 50
     for (k <- 2 to 50) {
 
       val gausian_mixture_model = new GaussianMixture()
@@ -160,11 +160,11 @@ val original_df = Spark.sql(query)
       val estimated_value = model.transform(transformedData)
 
       val model_evaluator = new ClusteringEvaluator().setDistanceMeasure("cosine")
-      val silhouette_score = model_evaluator.evaluate(estimated_value);
-      println("silhouette_score value " + silhouette_score + " for K " + k);
+      val s_width = model_evaluator.evaluate(estimated_value);
+      println("silhouette width " + s_width + " for K " + k);
 
-      val newRow = Seq((k, silhouette_score)).toDF("cluster", "silhouette_score");
-      clusterSilhouette_df = clusterSilhouette_df.union(newRow)
+      val newLine = Seq((k, s_width)).toDF("cluster", "s_width");
+      clusterSilhouette_df = clusterSilhouette_df.union(newLine)
 
 
       for (i <- 0 until model.getK) {
@@ -175,17 +175,17 @@ val original_df = Spark.sql(query)
 
       val checkNormalDistributionConfidence: Any => Boolean = _.asInstanceOf[DenseVector].toArray.exists(_ > 0.90)
       val checkNormalDistributionConfidenceUdf = udf(checkNormalDistributionConfidence)
-      val reviewer_fake_df = estimated_value.withColumn("normal", checkNormalDistributionConfidenceUdf($"probability"))
+      val reviewerDataFrame = estimated_value.withColumn("normal", checkNormalDistributionConfidenceUdf($"probability"))
 
       if (printFlag) {
-        reviewer_fake_df.show();
+        reviewerDataFrame.show();
       }
 
 
-      val reviewer_fake_df2 = reviewer_fake_df.columns.foldLeft(reviewer_fake_df)((current, c) => current.withColumn(c, col(c).cast("String")))
-      val reviewer_fake_df3 = reviewer_fake_df2.select("review_id", "product_id", "customer_id", "prediction", "normal")
+      val reviewerDataFrame2 = reviewerDataFrame.columns.foldLeft(reviewerDataFrame)((current, c) => current.withColumn(c, col(c).cast("String")))
+      val reviewerDataFrame3 = reviewerDataFrame2.select("review_id", "product_id", "customer_id", "prediction", "normal")
 
-      reviewer_fake_df3.coalesce(1).write.mode(SaveMode.Overwrite).csv(output + "_" + k);
+      reviewerDataFrame3.coalesce(1).write.mode(SaveMode.Overwrite).csv(output + "_" + k);
 
       if (printFlag) {
         clusterSilhouette_df.show()
